@@ -1,6 +1,6 @@
 use crate::cli::completion::CompletionHelper;
 use crate::cli::*;
-use crate::git::conflict::{ConflictCheckBaseBranch, ConflictChecker, ConflictStatistics};
+use crate::git::conflict::{ConflictChecker, ConflictStatistics};
 use crate::model::{
     ByQPathFilteringNodePathTransformer, HasBranchFilteringNodePathTransformer,
     NodePathTransformer, NodePathType, QPathFilteringMode, QualifiedPath,
@@ -33,8 +33,7 @@ fn run_check(context: &CommandContext) -> Result<ConflictStatistics, Box<dyn Err
         None => return Err("Nothing to check: no features exist".into()),
     };
     let current_path = context.git.get_current_node_path()?;
-    let area = context.git.get_current_area()?.get_qualified_path();
-    let checker = ConflictChecker::new(&context.git, ConflictCheckBaseBranch::Custom(area));
+    let checker = ConflictChecker::new(&context.git);
     let statistics: ConflictStatistics = match (all, maybe_feature, maybe_targets) {
         // all AND source are not set => error
         (false, None, _) => return Err("Feature must be provided if --all is not set".into()),
@@ -44,7 +43,7 @@ fn run_check(context: &CommandContext) -> Result<ConflictStatistics, Box<dyn Err
                 .iter_children_req()
                 .map(|child| child.get_qualified_path())
                 .collect();
-            checker.check_n_to_n_pairwise(&all_features)?.collect()
+            checker.check_n_to_n_permutations(all_features, 2)?.collect()
         }
         // all is not set, source is set, target not => check source against all
         (false, Some(source), None) => {
@@ -73,7 +72,7 @@ fn run_check(context: &CommandContext) -> Result<ConflictStatistics, Box<dyn Err
                 })
                 .collect();
             checker
-                .check_1_to_n_pairwise(&qualified_source, &all_other_features)?
+                .check_1_to_n_permutations(&qualified_source, all_other_features, 2)?
                 .collect()
         }
         (false, Some(source), Some(targets)) => {
@@ -83,7 +82,7 @@ fn run_check(context: &CommandContext) -> Result<ConflictStatistics, Box<dyn Err
                 .map(|target| current_path.get_qualified_path() + QualifiedPath::from(target))
                 .collect();
             checker
-                .check_1_to_n_pairwise(&qualified_source, &qualified_targets)?
+                .check_1_to_n_permutations(&qualified_source, qualified_targets, 2)?
                 .collect()
         }
     };

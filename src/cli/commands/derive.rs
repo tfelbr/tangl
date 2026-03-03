@@ -205,7 +205,7 @@ fn build_edges(
     conflict_data
         .iter_ok()
         .map(|element| match element {
-            ConflictStatistic::OK((l, r)) => {
+            ConflictStatistic::Success((l, r)) => {
                 let left = path_to_id.get(l).unwrap().clone() as u32;
                 let right = path_to_id.get(r).unwrap().clone() as u32;
                 (left, right)
@@ -332,9 +332,13 @@ fn handle_derivation(
             cloned
         }
         true => {
-            context.info("Info: merge order optimization is disabled".yellow().to_string());
+            context.info(
+                "Info: merge order optimization is disabled"
+                    .yellow()
+                    .to_string(),
+            );
             missing
-        },
+        }
     };
     let mut completed: Vec<QualifiedPath> = Vec::new();
     for path in merge_order {
@@ -344,11 +348,11 @@ fn handle_derivation(
             true => {
                 progress.mark_as_completed(&path_vec);
                 completed.push(path)
-            },
+            }
             false => {
                 context.git.abort_merge()?;
-                break
-            },
+                break;
+            }
         }
     }
     context.info(format!(
@@ -409,7 +413,7 @@ fn calculate_features_without_conflicts(
     let (id_to_path, path_to_id) = map_paths_to_id(features);
     let conflicts: ConflictStatistics =
         ConflictChecker::new(&context.git, ConflictCheckBaseBranch::Current)
-            .check_n_to_n_pairwise(features)?
+            .check_n_to_n_permutations(features)?
             .collect();
     if conflicts.n_errors() > 0 {
         return Err("Errors occurred while checking for conflicts.".into());
@@ -459,8 +463,8 @@ impl CommandInterface for DeriveCommand {
             _ => {
                 return Err(format!(
                     "Current branch is not a product. You can create one with the {} command and/or {} one.",
-                    "product".italic().bold(),
-                    "checkout".italic().bold(),
+                    "product".yellow(),
+                    "checkout".yellow(),
                 )
                 .into());
             }
