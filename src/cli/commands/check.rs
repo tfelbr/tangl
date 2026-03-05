@@ -72,7 +72,7 @@ fn run_check(context: &CommandContext) -> Result<ConflictStatistics, Box<dyn Err
                 })
                 .collect();
             checker
-                .check_permutations_against_base(all_other_features, &qualified_source, 2)?
+                .check_permutations_against_base(all_other_features, &qualified_source, 1)?
                 .collect()
         }
         (false, Some(source), Some(targets)) => {

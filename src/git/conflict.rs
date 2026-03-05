@@ -15,7 +15,7 @@ pub struct MergeSuccess {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MergeConflict {
     pub paths: Vec<QualifiedPath>,
-    pub failed_at: usize,
+    pub failed_at: Vec<usize>,
 }
 
 #[derive(Debug)]
@@ -57,7 +57,7 @@ impl PartialEq for ConflictStatistic {
 
 impl Display for ConflictStatistic {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fn format(paths: &Vec<QualifiedPath>, fail_at: Option<&usize>, error: bool) -> String {
+        fn format(paths: &Vec<QualifiedPath>, fail_at: Option<&Vec<usize>>, error: bool) -> String {
             match error {
                 true => paths
                     .iter()
@@ -71,9 +71,10 @@ impl Display for ConflictStatistic {
                     .enumerate()
                     .map(|(index, p)| match fail_at {
                         Some(fail_at) => {
-                            if &index < fail_at {
+                            let first = fail_at.get(0).unwrap();
+                            if &index < first {
                                 p.to_string().green().to_string()
-                            } else if &index == fail_at {
+                            } else if &index == first {
                                 p.to_string().red().to_string()
                             } else {
                                 p.to_string().strikethrough().to_string()
@@ -287,7 +288,7 @@ impl<'a> ConflictChecker<'a> {
                 None => ConflictStatistic::Success(MergeSuccess { paths }),
                 Some(value) => ConflictStatistic::Conflict(MergeConflict {
                     paths,
-                    failed_at: value,
+                    failed_at: vec![value],
                 }),
             },
             Err(e) => ConflictStatistic::Error(MergeError { paths, error: e }),
@@ -336,15 +337,16 @@ impl Conflict2DMatrix {
         }
     }
 
-    pub fn calculate_best_path_greedy(&self) -> Vec<QualifiedPath> {
+    pub fn calculate_best_path_greedy(&self) -> ConflictStatistic {
+        let mut has_conflicts = false;
         let mut missing = self.all_keys.clone();
-        missing.remove(0);
-        let mut final_path = vec![self.all_keys[0].clone()];
+        let start = missing.remove(0);
+        let mut final_path = vec![(start, 0)];
         while missing.len() > 0 {
             let mut votes: HashMap<i32, Vec<QualifiedPath>> = HashMap::new();
             for candidate in missing.iter() {
                 let mut vote = 0;
-                for p in final_path.iter() {
+                for (p, _) in final_path.iter() {
                     vote += self.matrix[p].get(candidate).unwrap();
                 }
                 if votes.contains_key(&vote) {
@@ -354,6 +356,7 @@ impl Conflict2DMatrix {
                 }
             }
             let max_vote = votes.keys().max().unwrap();
+            if max_vote < &0 { has_conflicts = true; }
             let max_candidates = &votes[&max_vote];
             let winner = match max_candidates.len() {
                 0 => { panic!("Empty candidates should not be possible") }
@@ -381,9 +384,22 @@ impl Conflict2DMatrix {
                 })
                 .unwrap();
             missing.remove(index);
-            final_path.push(winner);
+            final_path.push((winner, max_vote.clone()));
         };
-        final_path
+        match has_conflicts {
+            false => ConflictStatistic::Success(MergeSuccess { paths: final_path.into_iter().map(|(path, _)| path).collect() }),
+            true => {
+                let mut paths: Vec<QualifiedPath> = Vec::new();
+                let mut failed_at: Vec<usize> = Vec::new();
+                for (index, (p, i)) in final_path.into_iter().enumerate() {
+                    paths.push(p);
+                    if i < 0 {
+                        failed_at.push(index);
+                    }
+                }
+                ConflictStatistic::Conflict(MergeConflict { paths, failed_at })
+            }
+        }
     }
 
     fn calculate_forward_compatibility(&self, element: &QualifiedPath, missing: &Vec<QualifiedPath>) -> i32 {

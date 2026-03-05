@@ -1,6 +1,6 @@
 use crate::cli::completion::*;
 use crate::cli::*;
-use crate::git::conflict::{ConflictAnalyzer, ConflictChecker};
+use crate::git::conflict::{ConflictAnalyzer, ConflictChecker, ConflictStatistic};
 use crate::model::*;
 use clap::{Arg, ArgAction, Command};
 use colored::Colorize;
@@ -12,7 +12,7 @@ use uuid::Uuid;
 const FEATURES: &str = "features";
 const CONTINUE: &str = "continue";
 const ABORT: &str = "abort";
-const NO_OPTIMIZATION: &str = "no_optimization";
+const OPTIMIZATION: &str = "optimization";
 const DERIVATION_COMMENT: &str = "# DO NOT EDIT OR REMOVE THIS COMMIT\nDERIVATION STATUS\n";
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -22,6 +22,12 @@ pub struct FeatureMetadata {
 impl FeatureMetadata {
     pub fn new<S: Into<String>>(path: S) -> Self {
         Self { path: path.into() }
+    }
+    pub fn from_qualified_paths(paths: &Vec<QualifiedPath>) -> Vec<Self> {
+        paths.iter().map(|path| Self::new(path.clone()) ).collect()
+    }
+    pub fn qualified_paths(metadata: &Vec<Self>) -> Vec<QualifiedPath> {
+        metadata.iter().map(|m| m.get_qualified_path() ).collect()
     }
     pub fn get_qualified_path(&self) -> QualifiedPath {
         QualifiedPath::from(&self.path)
@@ -96,7 +102,7 @@ impl DerivationMetadata {
             features,
         )
     }
-    pub fn new_from_previously_finished<S: Into<String>>(
+    pub fn from_previously_finished<S: Into<String>>(
         previous: &Self,
         features: Vec<FeatureMetadata>,
         starting_commit: S,
@@ -138,6 +144,15 @@ impl DerivationMetadata {
                 self.completed.push(missing.unwrap().clone())
             }
         }
+    }
+    pub fn reorder_missing(&mut self, new_order: &Vec<QualifiedPath>) {
+        let old_missing = FeatureMetadata::qualified_paths(&self.missing);
+        let mut new_missing: Vec<QualifiedPath> = Vec::new();
+        for new in new_order.iter() {
+            if !old_missing.contains(new) { panic!("Cannot reorder: tried to introduce new feature") }
+            new_missing.push(new.clone());
+        }
+        self.missing = FeatureMetadata::from_qualified_paths(&new_missing);
     }
     pub fn get_completed(&self) -> &Vec<FeatureMetadata> {
         &self.completed
@@ -193,16 +208,28 @@ fn get_last_metadata(commits: &Vec<Commit>) -> Result<Option<DerivationMetadata>
     }
 }
 
+fn approximate_merge_order(
+    features: &Vec<QualifiedPath>,
+    context: &CommandContext,
+) -> Result<ConflictStatistic, Box<dyn Error>> {
+    let checker = ConflictChecker::new(&context.git);
+    let mut analyzer = ConflictAnalyzer::new(checker, context);
+    let current_path = context.git.get_current_qualified_path()?;
+    let matrix =
+        analyzer.calculate_2d_heuristics_matrix_with_merge_base(features, &current_path)?;
+    Ok(matrix.calculate_best_path_greedy())
+}
+
 fn handle_abort(
     last_state: &Option<DerivationMetadata>,
     abort: bool,
     context: &CommandContext,
 ) -> Result<bool, Box<dyn Error>> {
     match (last_state, abort) {
-        (None, true) => Err("Derivation not started, there is nothing to abort".into()),
+        (None, true) => Err("No derivation in progress, there is nothing to abort".into()),
         (Some(last_state), true) => match last_state.get_state() {
             DerivationState::Finished => {
-                Err("Derivation finished, there is nothing to abort".into())
+                Err("No derivation in progress, there is nothing to abort".into())
             }
             _ => {
                 context.info("Aborting current derivation process");
@@ -223,20 +250,20 @@ fn handle_continue(
     context: &mut CommandContext,
 ) -> Result<bool, Box<dyn Error>> {
     match (last_state, continue_derivation) {
-        (None, true) => Err("Derivation not started, there is nothing to continue".into()),
+        (None, true) => Err("No derivation in progress, there is nothing to continue".into()),
         (Some(last_state), true) => match last_state.get_state() {
             DerivationState::Finished => {
-                Err("Derivation finished, there is nothing to continue".into())
+                Err("No derivation in progress, there is nothing to continue".into())
             }
             _ => {
-                handle_derivation(last_state.clone(), true, context)?;
+                handle_derivation(last_state.clone(), context)?;
                 Ok(true)
             }
         },
         (Some(last_state), false) => match last_state.get_state() {
             DerivationState::Starting | DerivationState::InProgress => Err(format!(
                 "Derivation incomplete, please use {} to finish it first",
-                "tangl derive --continue".yellow()
+                "tangl derive --continue".purple()
             )
             .into()),
             _ => Ok(false),
@@ -245,9 +272,63 @@ fn handle_continue(
     }
 }
 
+fn get_next_state(
+    progress: Option<DerivationMetadata>,
+    optimization: bool,
+    features: Vec<QualifiedPath>,
+    context: &mut CommandContext,
+) -> Result<Option<DerivationMetadata>, Box<dyn Error>> {
+    let current_path = context.git.get_current_qualified_path()?;
+    let current_commit = context.git.get_commit_history(&current_path)?[0].clone();
+    let mut state = match (progress, optimization, !features.is_empty()) {
+        (None, true, false) => return Err("Cannot optimize merge order: No derivation in progress".into()),
+        (None, _, true) => DerivationMetadata::new_initial(FeatureMetadata::from_qualified_paths(&features), current_commit.get_hash()),
+        (Some(progress), true, false) => {
+            match progress.get_state() {
+                DerivationState::Finished => return Err("Cannot optimize merge order: No derivation in progress".into()),
+                _ => progress,
+            }
+        },
+        (Some(progress), _, true) => {
+            match progress.get_state() {
+                DerivationState::Finished => DerivationMetadata::from_previously_finished(&progress, FeatureMetadata::from_qualified_paths(&features), current_commit.get_hash()),
+                // handled by continue
+                _ => unreachable!(),
+            }
+        },
+        // handled by continue
+        _ => unreachable!(),
+    };
+
+    match optimization {
+        true => {
+            let original_order = state.get_missing();
+            let approximation = approximate_merge_order(&FeatureMetadata::qualified_paths(&original_order), &context)?;
+            context.info("Suggesting the following merge order:\n");
+            context.info(&approximation);
+
+            let new_order = match approximation {
+                ConflictStatistic::Success(success) => {
+                    context.info("\nExpecting no conflicts");
+                    success.paths
+                },
+                ConflictStatistic::Conflict(conflict) => {
+                    context.info(format!("\nExpecting {} conflicts", conflict.failed_at.len().to_string().red()));
+                    conflict.paths
+                },
+                ConflictStatistic::Error(error) => return Err(error.error.into()),
+            };
+            state.reorder_missing(&new_order[1..].to_vec());
+            context.git.empty_commit(make_derivation_commit_message(&state)?.as_str())?;
+            context.info(format!("If you are satisfied, run {} to commence the derivation", "--continue".purple()));
+            Ok(None)
+        }
+        false => { Ok(Some(state)) }
+    }
+}
+
 fn handle_derivation(
     mut progress: DerivationMetadata,
-    no_optimization: bool,
     context: &mut CommandContext,
 ) -> Result<(), Box<dyn Error>> {
     let missing = progress
@@ -255,21 +336,8 @@ fn handle_derivation(
         .iter()
         .map(|m| m.get_qualified_path())
         .collect::<Vec<QualifiedPath>>();
-    let merge_order: Vec<QualifiedPath> = match no_optimization {
-        false => {
-            approximate_merge_order(&missing, context)?
-        }
-        true => {
-            context.info(
-                "Info: merge order optimization is disabled"
-                    .yellow()
-                    .to_string(),
-            );
-            missing
-        }
-    };
     let mut completed: Vec<QualifiedPath> = Vec::new();
-    for path in merge_order.iter() {
+    for path in missing.iter() {
         let path_vec = vec![path.clone()];
         let result = context.git.merge(&path_vec)?;
         match result.status.success() {
@@ -334,18 +402,6 @@ fn handle_derivation(
     Ok(())
 }
 
-fn approximate_merge_order(
-    features: &Vec<QualifiedPath>,
-    context: &CommandContext,
-) -> Result<Vec<QualifiedPath>, Box<dyn Error>> {
-    let checker = ConflictChecker::new(&context.git);
-    let mut analyzer = ConflictAnalyzer::new(checker, context);
-    let current_path = context.git.get_current_qualified_path()?;
-    let matrix =
-        analyzer.calculate_2d_heuristics_matrix_with_merge_base(features, &current_path)?;
-    Ok(matrix.calculate_best_path_greedy())
-}
-
 #[derive(Clone, Debug)]
 pub struct DeriveCommand;
 
@@ -354,6 +410,7 @@ impl CommandDefinition for DeriveCommand {
         Command::new("derive")
             .about("Derive a product")
             .disable_help_subcommand(true)
+            .arg_required_else_help(true)
             .arg(Arg::new(FEATURES).action(ArgAction::Append))
             .arg(
                 Arg::new(CONTINUE)
@@ -365,13 +422,15 @@ impl CommandDefinition for DeriveCommand {
                 Arg::new(ABORT)
                     .long(ABORT)
                     .action(ArgAction::SetTrue)
+                    .exclusive(true)
                     .help("Abort the ongoing derivation process"),
             )
             .arg(
-                Arg::new(NO_OPTIMIZATION)
-                    .long("no-optimization")
+                Arg::new(OPTIMIZATION)
+                    .short('o')
+                    .long("optimize")
                     .action(ArgAction::SetTrue)
-                    .help("Disable optimization of merge order"),
+                    .help("Attempt to optimize the order of merges"),
             )
             .arg(verbose())
     }
@@ -386,12 +445,20 @@ impl CommandInterface for DeriveCommand {
             _ => {
                 return Err(format!(
                     "Current branch is not a product. You can create one with the {} command and/or {} one.",
-                    "product".yellow(),
-                    "checkout".yellow(),
+                    "product".purple(),
+                    "checkout".purple(),
                 )
                 .into());
             }
         };
+        let all_features = context
+            .arg_helper
+            .get_argument_values::<String>(FEATURES)
+            .unwrap_or(Vec::new())
+            .into_iter()
+            .map(|e| current_area.get_path_to_feature_root() + QualifiedPath::from(e))
+            .collect::<Vec<_>>();
+        drop(current_area);
         let continue_derivation = context
             .arg_helper
             .get_argument_value::<bool>(CONTINUE)
@@ -400,55 +467,28 @@ impl CommandInterface for DeriveCommand {
             .arg_helper
             .get_argument_value::<bool>(ABORT)
             .unwrap();
-        let no_optimization = context
+        let optimization = context
             .arg_helper
-            .get_argument_value::<bool>(NO_OPTIMIZATION)
+            .get_argument_value::<bool>(OPTIMIZATION)
             .unwrap();
 
         let commits = context.git.get_commit_history(&product_path)?;
         let last_state = get_last_metadata(&commits)?;
 
-        // handle abort flag
         if handle_abort(&last_state, abort_derivation, context)? {
             return Ok(());
         }
-        // handle continue flag
         if handle_continue(&last_state, continue_derivation, context)? {
             return Ok(());
         }
-        // now we know, this derivation is the initial one,
-        // regardless if there are previous succeeded ones or not
-
-        let all_features = context
-            .arg_helper
-            .get_argument_values::<String>(FEATURES)
-            .unwrap()
-            .into_iter()
-            .map(|e| current_area.get_path_to_feature_root() + QualifiedPath::from(e))
-            .collect::<Vec<_>>();
-        drop(current_area);
-        let features_metadata: Vec<FeatureMetadata> = all_features
-            .iter()
-            .map(|f| FeatureMetadata::new(f.clone()))
-            .collect();
-        let initial_metadata = match last_state {
-            Some(state) => match state.get_state() {
-                DerivationState::Finished => DerivationMetadata::new_from_previously_finished(
-                    &state,
-                    features_metadata,
-                    commits[0].get_hash(),
-                ),
-                _ => panic!("Unexpected derivation state {}", state.get_state()),
-            },
-            None => DerivationMetadata::new_initial(features_metadata, commits[0].get_hash()),
-        };
-        context
-            .git
-            .empty_commit(make_derivation_commit_message(&initial_metadata)?.as_str())?;
-
-        handle_derivation(initial_metadata, no_optimization, context)?;
+        let new_state = get_next_state(last_state, optimization, all_features, context)?;
+        if new_state.is_none() {
+            return Ok(());
+        }
+        handle_derivation(new_state.unwrap(), context)?;
         Ok(())
     }
+
     fn shell_complete(
         &self,
         completion_helper: CompletionHelper,
