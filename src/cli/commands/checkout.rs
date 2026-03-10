@@ -1,7 +1,8 @@
 use crate::cli::completion::*;
 use crate::cli::*;
-use crate::model::QualifiedPath;
+use crate::model::{BranchAble, QualifiedPath};
 use clap::{Arg, Command};
+use colored::Colorize;
 use std::error::Error;
 
 #[derive(Clone, Debug)]
@@ -21,9 +22,27 @@ impl CommandInterface for CheckoutCommand {
             .get_argument_value::<String>("branch")
             .unwrap();
         let full_target = context.git.get_current_qualified_path()? + QualifiedPath::from(branch);
-        let result = context.git.checkout(&full_target)?;
-        context.log_from_output(&result);
-        Ok(())
+        let maybe_node_path = context.git.get_model().get_node_path(&full_target);
+        if let Some(node_path) = maybe_node_path {
+            let maybe_concrete = node_path.try_as_concrete_type::<BranchAble>();
+            if let Some(concrete_branch) = maybe_concrete {
+                let result = context.git.checkout(&concrete_branch)?;
+                context.log_from_output(&result);
+                Ok(())
+            } else {
+                Err(format!(
+                    "fatal: path {} is no valid target for checkout",
+                    full_target.to_string().red()
+                )
+                .into())
+            }
+        } else {
+            Err(format!(
+                "fatal: cannot checkout path {}: does not exist",
+                full_target.to_string().red()
+            )
+            .into())
+        }
     }
     fn shell_complete(
         &self,

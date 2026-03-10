@@ -1,5 +1,5 @@
 use crate::cli::*;
-use crate::model::NodePathType;
+use crate::model::ConcreteNodePathType;
 use clap::Command;
 use std::error::Error;
 
@@ -16,22 +16,22 @@ impl CommandDefinition for SpreadCommand {
 
 impl CommandInterface for SpreadCommand {
     fn run_command(&self, context: &mut CommandContext) -> Result<(), Box<dyn Error>> {
-        let current_path = context.git.get_current_node_path()?;
-        let current_branch = current_path.get_qualified_path();
-        let merge_argument = vec![current_branch.clone()];
-        for path in current_path.iter_children_req() {
-            let qualified_path = path.get_qualified_path();
-            match path.concretize() {
-                NodePathType::Tag(_) => {}
-                _ => {
-                    context.info(format!("Spreading to {}", qualified_path));
-                    context.git.checkout(&qualified_path)?;
-                    context.git.merge(&merge_argument)?;
-                }
-            }
-        }
-        context.git.checkout(&current_branch)?;
-        context.info("Success");
+        // let current_path = context.git.get_current_node_path()?;
+        // let current_branch = current_path.to_qualified_path();
+        // let merge_argument = vec![current_branch.clone()];
+        // for path in current_path.iter_children_req() {
+        //     let qualified_path = path.to_qualified_path();
+        //     match path.concretize() {
+        //         ConcreteNodePathType::Tag(_) => {}
+        //         _ => {
+        //             context.info(format!("Spreading to {}", qualified_path));
+        //             context.git.checkout(&qualified_path)?;
+        //             context.git.merge(&merge_argument)?;
+        //         }
+        //     }
+        // }
+        // context.git.checkout(&current_branch)?;
+        // context.info("Success");
         Ok(())
     }
 }

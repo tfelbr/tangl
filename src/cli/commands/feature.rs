@@ -2,18 +2,20 @@ use crate::cli::completion::*;
 use crate::cli::*;
 use crate::model::*;
 use clap::{Arg, Command};
+use colored::Colorize;
 use std::error::Error;
 
 fn add_feature(feature: QualifiedPath, context: &mut CommandContext) -> Result<(), Box<dyn Error>> {
     let node_path = context.git.get_current_node_path()?;
-    let current_path = match node_path.concretize() {
-        NodePathType::Area(path) => path.get_path_to_feature_root(),
-        NodePathType::Feature(path) => path.get_qualified_path(),
-        _ => {
-            return Err(Box::new(CommandError::new(
-                "Cannot create feature: Current branch is not a feature or area branch",
-            )));
-        }
+    let current_path = if let Some(path) = node_path.as_any_type().try_as_concrete_type::<Feature>()
+    {
+        path.to_qualified_path()
+    } else if let Some(path) = node_path.as_any_type().try_as_concrete_type::<Area>() {
+        path.get_path_to_feature_root()
+    } else {
+        return Err(Box::new(CommandError::new(
+            "Cannot create feature: Current branch is not a feature or area branch",
+        )));
     };
     let target_path = current_path + feature;
     let output = context.git.create_branch(&target_path)?;
@@ -30,13 +32,33 @@ fn delete_feature(
 ) -> Result<(), Box<dyn Error>> {
     let area = context.git.get_current_area()?;
     let complete_path = area.get_path_to_feature_root() + feature;
-    let output = context.git.delete_branch(&complete_path)?;
-    context.log_from_output(&output);
-    Ok(())
+    let node_path = context.git.get_model().get_node_path(&complete_path);
+    if let Some(path) = node_path {
+        if let Some(feature) = path.as_any_type().try_as_concrete_type::<Feature>() {
+            let output = context.git.delete_branch(feature)?;
+            if output.status.success() {
+                context.info(format!(
+                    "Deleted feature {}",
+                    complete_path.to_string().blue()
+                ))
+            } else {
+                context.log_from_output(&output);
+            }
+            Ok(())
+        } else {
+            Err(format!("Path {} is not a feature", path.to_string().red()).into())
+        }
+    } else {
+        Err(format!(
+            "Cannot delete feature {}: does not exist",
+            complete_path.to_string().red()
+        )
+        .into())
+    }
 }
 fn print_feature_tree(context: &mut CommandContext, show_tags: bool) -> Result<(), Box<dyn Error>> {
     let area = context.git.get_current_area()?;
-    match area.to_feature_root() {
+    match area.move_to_feature_root() {
         Some(path) => {
             context.info(path.display_tree(show_tags));
         }
@@ -90,13 +112,13 @@ impl CommandInterface for FeatureCommand {
         let result = match completion_helper.currently_editing() {
             Some(arg) => match arg.get_id().as_str() {
                 "delete" => {
-                    let maybe_feature_root = context.git.get_current_area()?.to_feature_root();
+                    let maybe_feature_root = context.git.get_current_area()?.move_to_feature_root();
                     match maybe_feature_root {
                         Some(path) => completion_helper.complete_qualified_paths(
-                            path.get_qualified_path(),
+                            path.to_qualified_path(),
                             HasBranchFilteringNodePathTransformer::new(true)
                                 .transform(path.iter_children_req())
-                                .map(|path| path.get_qualified_path()),
+                                .map(|path| path.to_qualified_path()),
                         ),
                         None => {
                             vec![]
@@ -131,8 +153,8 @@ mod tests {
             interface
                 .get_current_area()
                 .unwrap()
-                .to_feature_root()?
-                .to_feature(&QualifiedPath::from("root"))
+                .move_to_feature_root()?
+                .move_to_feature(&QualifiedPath::from("root"))
         }
 
         let path = TempDir::new().unwrap();
@@ -164,10 +186,10 @@ mod tests {
             interface
                 .get_current_area()
                 .unwrap()
-                .to_feature_root()?
-                .to_feature(&QualifiedPath::from("root"))?
-                .to_feature(&QualifiedPath::from("foo"))?
-                .to_feature(&QualifiedPath::from("1"))
+                .move_to_feature_root()?
+                .move_to_feature(&QualifiedPath::from("root"))?
+                .move_to_feature(&QualifiedPath::from("foo"))?
+                .move_to_feature(&QualifiedPath::from("1"))
         }
 
         let path = TempDir::new().unwrap();

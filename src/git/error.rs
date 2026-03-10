@@ -26,6 +26,7 @@ pub enum GitError {
     Io(io::Error),
     GitInterface(GitInterfaceError),
     WrongNodeType(WrongNodeTypeError),
+    SerdeJson(serde_json::Error),
 }
 impl Display for GitError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -33,6 +34,7 @@ impl Display for GitError {
             GitError::Io(err) => err.fmt(f),
             GitError::GitInterface(err) => err.fmt(f),
             GitError::WrongNodeType(err) => err.fmt(f),
+            GitError::SerdeJson(err) => err.fmt(f),
         }
     }
 }
@@ -50,5 +52,10 @@ impl From<GitInterfaceError> for GitError {
 impl From<WrongNodeTypeError> for GitError {
     fn from(value: WrongNodeTypeError) -> Self {
         GitError::WrongNodeType(value)
+    }
+}
+impl From<serde_json::Error> for GitError {
+    fn from(err: serde_json::Error) -> Self {
+        GitError::SerdeJson(err)
     }
 }

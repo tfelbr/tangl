@@ -2,8 +2,9 @@ use crate::cli::completion::CompletionHelper;
 use crate::cli::*;
 use crate::git::conflict::{ConflictChecker, ConflictStatistics};
 use crate::model::{
-    ByQPathFilteringNodePathTransformer, HasBranchFilteringNodePathTransformer,
-    NodePathTransformer, NodePathType, QPathFilteringMode, QualifiedPath,
+    BranchAble, ByQPathFilteringNodePathTransformer, Feature,
+    HasBranchFilteringNodePathTransformer, NodePath, NodePathTransformer, QPathFilteringMode,
+    QualifiedPath, ToQualifiedPath,
 };
 use clap::{Arg, ArgAction, Command};
 use colored::Colorize;
@@ -28,7 +29,7 @@ fn run_check(context: &CommandContext) -> Result<ConflictStatistics, Box<dyn Err
             Some(targets) => Some(targets.into_iter().map(QualifiedPath::from).collect()),
             None => None,
         };
-    let feature_root = match context.git.get_current_area()?.to_feature_root() {
+    let feature_root = match context.git.get_current_area()?.move_to_feature_root() {
         Some(path) => path,
         None => return Err("Nothing to check: no features exist".into()),
     };
@@ -39,47 +40,47 @@ fn run_check(context: &CommandContext) -> Result<ConflictStatistics, Box<dyn Err
         (false, None, _) => return Err("Feature must be provided if --all is not set".into()),
         // all is set => check all
         (true, _, _) => {
-            let all_features: Vec<QualifiedPath> = feature_root
-                .iter_children_req()
-                .map(|child| child.get_qualified_path())
+            let all_features: Vec<&NodePath<BranchAble>> = feature_root
+                .iter_features_req()
+                .map(|p| &p.as_branch_able())
                 .collect();
             checker.check_k_permutations(all_features, 2)?.collect()
         }
         // all is not set, source is set, target not => check source against all
         (false, Some(source), None) => {
-            let qualified_source = current_path.get_qualified_path() + source;
-            match context
+            let qualified_source = current_path.to_qualified_path() + source;
+            let path = match context
                 .git
                 .get_model()
                 .get_node_path(&qualified_source)
                 .unwrap()
-                .concretize()
+                .try_as_concrete_type::<Feature>()
             {
-                NodePathType::Feature(_) => {}
+                Some(p) => p,
                 _ => {
                     return Err(format!("{} is not a feature", qualified_source).into());
                 }
-            }
-            let all_other_features: Vec<QualifiedPath> = feature_root
-                .iter_children_req()
+            };
+            let all_other_features: Vec<&NodePath<BranchAble>> = feature_root
+                .iter_features_req()
                 .filter_map(|child| {
-                    let path = child.get_qualified_path();
+                    let path = child.to_qualified_path();
                     if path != qualified_source {
-                        Some(path)
+                        Some(&child.as_branch_able())
                     } else {
                         None
                     }
                 })
                 .collect();
             checker
-                .check_permutations_against_base(all_other_features, &qualified_source, 1)?
+                .check_permutations_against_base(all_other_features, &path.as_branch_able(), 1)?
                 .collect()
         }
         (false, Some(source), Some(targets)) => {
-            let qualified_source = current_path.get_qualified_path() + source;
+            let qualified_source = current_path.to_qualified_path() + source;
             let qualified_targets: Vec<QualifiedPath> = targets
                 .into_iter()
-                .map(|target| current_path.get_qualified_path() + QualifiedPath::from(target))
+                .map(|target| current_path.to_qualified_path() + QualifiedPath::from(target))
                 .collect();
             checker
                 .check_permutations_against_base(qualified_targets, &qualified_source, 2)?
@@ -140,7 +141,7 @@ impl CommandInterface for CheckCommand {
     ) -> Result<Vec<String>, Box<dyn Error>> {
         let currently_editing = completion_helper.currently_editing();
         let completion: Vec<String> = if currently_editing.is_some() {
-            let feature_root = match context.git.get_current_area()?.to_feature_root() {
+            let feature_root = match context.git.get_current_area()?.move_to_feature_root() {
                 Some(path) => path,
                 None => return Ok(vec![]),
             };
@@ -149,7 +150,7 @@ impl CommandInterface for CheckCommand {
             match currently_editing.unwrap().get_id().as_str() {
                 SOURCE => completion_helper.complete_qualified_paths(
                     context.git.get_current_qualified_path()?,
-                    relevant_paths.map(|path| path.get_qualified_path()),
+                    relevant_paths.map(|path| path.to_qualified_path()),
                 ),
                 TARGETS => {
                     let current_path = context.git.get_current_qualified_path()?;
@@ -169,7 +170,7 @@ impl CommandInterface for CheckCommand {
                     let filtered = filter.transform(relevant_paths);
                     completion_helper.complete_qualified_paths(
                         context.git.get_current_qualified_path()?,
-                        filtered.map(|path| path.get_qualified_path()),
+                        filtered.map(|path| path.to_qualified_path()),
                     )
                 }
                 _ => {

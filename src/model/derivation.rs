@@ -1,4 +1,4 @@
-use crate::model::QualifiedPath;
+use crate::model::{Feature, NodePath, QualifiedPath, ToQualifiedPath};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use uuid::Uuid;
@@ -13,6 +13,12 @@ impl FeatureMetadata {
     }
     pub fn from_qualified_paths(paths: &Vec<QualifiedPath>) -> Vec<Self> {
         paths.iter().map(|path| Self::new(path.clone())).collect()
+    }
+    pub fn from_features(features: &Vec<NodePath<Feature>>) -> Vec<Self> {
+        features
+            .iter()
+            .map(|path| Self::new(path.to_qualified_path()))
+            .collect()
     }
     pub fn qualified_paths(metadata: &Vec<Self>) -> Vec<QualifiedPath> {
         metadata.iter().map(|m| m.get_qualified_path()).collect()
@@ -90,7 +96,7 @@ impl DerivationMetadata {
             features,
         )
     }
-    pub fn from_previously_finished<S: Into<String>>(
+    pub fn new_from_previously_finished<S: Into<String>>(
         previous: &Self,
         features: Vec<FeatureMetadata>,
         starting_commit: S,

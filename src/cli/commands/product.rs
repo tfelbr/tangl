@@ -2,6 +2,7 @@ use crate::cli::completion::*;
 use crate::cli::*;
 use crate::model::*;
 use clap::{Arg, Command};
+use colored::Colorize;
 use std::error::Error;
 
 fn delete_product(
@@ -10,13 +11,32 @@ fn delete_product(
 ) -> Result<(), Box<dyn Error>> {
     let area = context.git.get_current_area()?;
     let complete_path = area.get_path_to_product_root() + product;
-    let output = context.git.delete_branch(&complete_path)?;
-    context.log_from_output(&output);
-    Ok(())
+    if let Some(path) = context.git.get_model().get_node_path(&complete_path) {
+        if let Some(product) = path.as_any_type().try_as_concrete_type::<Product>() {
+            let output = context.git.delete_branch(product)?;
+            if output.status.success() {
+                context.info(format!(
+                    "Deleted product {}",
+                    complete_path.to_string().blue()
+                ));
+            } else {
+                context.log_from_output(&output);
+            }
+            Ok(())
+        } else {
+            Err(format!("Path {} is not a product", path.to_string().red()).into())
+        }
+    } else {
+        Err(format!(
+            "Cannot delete feature {}: does not exist",
+            complete_path.to_string().red()
+        )
+        .into())
+    }
 }
 fn print_product_tree(context: &mut CommandContext) -> Result<(), Box<dyn Error>> {
     let area = context.git.get_current_area()?;
-    match area.to_product_root() {
+    match area.move_to_product_root() {
         Some(path) => {
             context.info(path.display_tree(false));
         }
@@ -61,13 +81,13 @@ impl CommandInterface for ProductCommand {
         let result = match completion_helper.currently_editing() {
             Some(arg) => match arg.get_id().as_str() {
                 "delete" => {
-                    let maybe_feature_root = context.git.get_current_area()?.to_product_root();
+                    let maybe_feature_root = context.git.get_current_area()?.move_to_product_root();
                     match maybe_feature_root {
                         Some(path) => completion_helper.complete_qualified_paths(
-                            path.get_qualified_path(),
+                            path.to_qualified_path(),
                             HasBranchFilteringNodePathTransformer::new(true)
                                 .transform(path.iter_children_req())
-                                .map(|path| path.get_qualified_path()),
+                                .map(|path| path.to_qualified_path()),
                         ),
                         None => {
                             vec![]

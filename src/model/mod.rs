@@ -1,15 +1,19 @@
 mod commit;
+mod derivation;
 mod importer;
 mod node;
 mod node_path;
+mod node_type;
 mod qualified_path;
+mod transformer;
 mod tree;
-mod derivation;
 
 pub use commit::*;
+pub use derivation::*;
 pub use importer::*;
 pub use node::*;
 pub use node_path::*;
+pub use node_type::*;
 pub use qualified_path::*;
+pub use transformer::*;
 pub use tree::*;
-pub use derivation::*;

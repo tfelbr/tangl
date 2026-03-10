@@ -107,9 +107,14 @@ impl GitInterface {
         base.push(self.get_current_branch()?);
         Ok(base)
     }
-    pub fn get_current_node_path(&self) -> Result<NodePath<AnyNodeType>, GitError> {
+    pub fn get_current_node_path(&self) -> Result<NodePath<BranchAble>, GitError> {
         let current_qualified_path = self.get_current_qualified_path()?;
-        Ok(self.model.get_node_path(&current_qualified_path).unwrap())
+        Ok(self
+            .model
+            .get_node_path(&current_qualified_path)
+            .unwrap()
+            .try_as_concrete_type()
+            .unwrap())
     }
     pub fn get_current_area(&self) -> Result<NodePath<Area>, GitError> {
         let current_qualified_path = self.get_current_qualified_path()?;
@@ -131,13 +136,8 @@ impl GitInterface {
             .raw_git_interface
             .run(vec!["checkout", path.to_git_branch().as_str()])?)
     }
-    pub fn checkout(&self, path: &QualifiedPath) -> Result<Output, GitError> {
-        if !self.model.has_branch(&path) {
-            return Err(GitError::GitInterface(GitInterfaceError::new(
-                format!("Cannot checkout branch {}: does not exist", path).as_str(),
-            )));
-        }
-        self.checkout_raw(&path)
+    pub fn checkout<T: CanHaveBranch>(&self, path: &NodePath<T>) -> Result<Output, GitError> {
+        self.checkout_raw(&path.to_qualified_path())
     }
     pub(super) fn create_branch_no_mut(&self, path: &QualifiedPath) -> Result<Output, GitError> {
         let branch = path.to_git_branch();
@@ -155,17 +155,21 @@ impl GitInterface {
             )))
         }
     }
-    pub fn delete_branch(&self, path: &QualifiedPath) -> Result<Output, GitError> {
+    pub(super) fn delete_branch_no_mut(&self, path: &QualifiedPath) -> Result<Output, GitError> {
         let branch = path.to_git_branch();
         let commands = vec!["branch", "-D", branch.as_str()];
         Ok(self.raw_git_interface.run(commands)?)
     }
-    pub fn merge(&self, paths: &Vec<QualifiedPath>) -> Result<Output, GitError> {
-        let mut base = vec!["merge"];
-        let new_paths: Vec<String> = paths.iter().map(|s| s.to_git_branch()).collect();
-        let converted_paths: Vec<&str> = new_paths.iter().map(|p| p.as_str()).collect();
-        base.extend(converted_paths);
-        Ok(self.raw_git_interface.run(base)?)
+    pub fn delete_branch<T: CanHaveBranch>(
+        &mut self,
+        path: NodePath<T>,
+    ) -> Result<Output, GitError> {
+        self.delete_branch_no_mut(&path.to_qualified_path())
+    }
+    pub fn merge<T: CanHaveBranch>(&self, path: &NodePath<T>) -> Result<Output, GitError> {
+        Ok(self
+            .raw_git_interface
+            .run(vec!["merge", path.to_git_branch().as_str()])?)
     }
     pub fn abort_merge(&self) -> Result<Output, GitError> {
         Ok(self.raw_git_interface.run(vec!["merge", "--abort"])?)
@@ -184,7 +188,10 @@ impl GitInterface {
             .raw_git_interface
             .run(vec!["tag", "-d", tagged.to_git_branch().as_str()])?)
     }
-    pub fn get_commit_history(&self, branch: &QualifiedPath) -> Result<Vec<BaseCommit>, GitError> {
+    pub fn get_commit_history<T: CanHaveBranch>(
+        &self,
+        branch: &NodePath<T>,
+    ) -> Result<Vec<BaseCommit>, GitError> {
         let raw_hashes = u8_to_string(
             &self
                 .raw_git_interface
@@ -211,6 +218,22 @@ impl GitInterface {
             })
             .collect();
         Ok(commits)
+    }
+    pub fn get_derivation_commits(
+        &self,
+        path: &NodePath<Product>,
+    ) -> Result<Vec<DerivationCommit>, GitError> {
+        let mut derivation_commits: Vec<DerivationCommit> = vec![];
+        for commit in self.get_commit_history(path)? {
+            match DerivationCommit::from_base_commit(commit) {
+                Some(c) => match c {
+                    Ok(c) => derivation_commits.push(c),
+                    Err(e) => return Err(e.into()),
+                },
+                None => {}
+            }
+        }
+        Ok(derivation_commits)
     }
     pub fn get_files_managed_by_branch(
         &self,

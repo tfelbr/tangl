@@ -40,10 +40,10 @@ impl TreeDataModel {
     pub fn get_virtual_root(&self) -> NodePath<VirtualRoot> {
         NodePath::<VirtualRoot>::new(vec![self.virtual_root.clone()])
     }
-    pub fn get_node_path(&self, path: &QualifiedPath) -> Option<NodePath<AnyNodeType>> {
+    pub fn get_node_path(&self, path: &QualifiedPath) -> Option<NodePath<AnyNode>> {
         let initial_path = self.get_virtual_root();
         let new_path = path.strip_n_left(1);
-        initial_path.to(&new_path)
+        initial_path.move_to(&new_path)
     }
     pub fn has_branch(&self, qualified_path: &QualifiedPath) -> bool {
         self.qualified_paths_with_branch
@@ -66,6 +66,6 @@ mod tests {
         tree.insert_qualified_path(QualifiedPath::from("/main"), false)
             .unwrap();
         let path = tree.get_node_path(&QualifiedPath::from("/main")).unwrap();
-        assert_eq!(path.get_qualified_path(), "/main")
+        assert_eq!(path.to_qualified_path(), "/main")
     }
 }

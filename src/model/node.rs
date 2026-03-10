@@ -1,87 +1,11 @@
+use crate::model::node_type::{NodeType, WrongNodeTypeError};
 use crate::model::*;
 use colored::{ColoredString, Colorize};
 use std::collections::HashMap;
-use std::error::Error;
-use std::fmt::{Debug, Display, Formatter};
+use std::fmt::Debug;
 use std::hash::Hash;
 use std::rc::Rc;
 use termtree::Tree;
-
-#[derive(Debug, Clone)]
-pub struct WrongNodeTypeError {
-    msg: String,
-}
-impl WrongNodeTypeError {
-    pub fn new<S: Into<String>>(msg: S) -> WrongNodeTypeError {
-        WrongNodeTypeError { msg: msg.into() }
-    }
-}
-impl Display for WrongNodeTypeError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.msg)
-    }
-}
-impl Error for WrongNodeTypeError {}
-
-#[derive(Clone, Debug)]
-pub struct Feature;
-#[derive(Clone, Debug)]
-pub struct FeatureRoot;
-#[derive(Clone, Debug)]
-pub struct Product;
-#[derive(Clone, Debug)]
-pub struct ProductRoot;
-#[derive(Clone, Debug)]
-pub struct Area;
-#[derive(Clone, Debug)]
-pub struct VirtualRoot;
-#[derive(Clone, Debug)]
-pub struct Tag;
-#[derive(Clone, Debug)]
-pub struct AnyNodeType;
-#[derive(Clone, Debug)]
-pub enum NodeType {
-    Feature,
-    Product,
-    FeatureRoot,
-    ProductRoot,
-    Area,
-    VirtualRoot,
-    Tag,
-}
-
-impl NodeType {
-    pub fn build_child_from_name(&mut self, name: &str) -> Result<NodeType, WrongNodeTypeError> {
-        match self {
-            Self::Feature => Ok(Self::Feature),
-            Self::Product => Ok(Self::Product),
-            Self::FeatureRoot => Ok(Self::Feature),
-            Self::ProductRoot => Ok(Self::Product),
-            Self::VirtualRoot => Ok(Self::Area),
-            Self::Area => {
-                if name.starts_with(FEATURES_PREFIX) {
-                    Ok(Self::FeatureRoot)
-                } else if name.starts_with(PRODUCTS_PREFIX) {
-                    Ok(Self::ProductRoot)
-                } else {
-                    Err(WrongNodeTypeError::new(format!(
-                        "'{}' is no valid child of an area node. Valid childs include: feature, product",
-                        name
-                    )))
-                }
-            }
-            Self::Tag => Err(WrongNodeTypeError::new("Tags cannot have children")),
-        }
-    }
-    pub fn format_node_display(&self, name: ColoredString) -> ColoredString {
-        match self {
-            Self::FeatureRoot => name.bright_purple().bold(),
-            Self::ProductRoot => name.red().bold(),
-            Self::Tag => name.green(),
-            _ => name,
-        }
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct NodeMetadata {

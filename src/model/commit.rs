@@ -1,5 +1,5 @@
-use serde::Deserialize;
 use crate::model::DerivationMetadata;
+use serde::Deserialize;
 
 pub trait Commit {
     fn get_hash(&self) -> &String;
@@ -42,7 +42,7 @@ impl BaseCommit {
 
 const DERIVATION_COMMENT: &str = "# DO NOT EDIT OR REMOVE THIS COMMIT\nDERIVATION STATUS\n";
 
-struct DerivationCommit {
+pub struct DerivationCommit {
     base_commit: BaseCommit,
     metadata: DerivationMetadata,
 }
@@ -62,13 +62,24 @@ impl DerivationCommit {
         if !base_commit.get_message().contains(DERIVATION_COMMENT) {
             return None;
         }
-        let metadata = DerivationMetadata::from_json(base_commit.get_message());
+        let metadata = DerivationMetadata::from_json(
+            base_commit
+                .get_message()
+                .strip_prefix(DERIVATION_COMMENT)
+                .unwrap()
+                .to_string(),
+        );
         match metadata {
-            Ok(metadata) => Some(Ok(Self { base_commit, metadata })),
+            Ok(metadata) => Some(Ok(Self {
+                base_commit,
+                metadata,
+            })),
             Err(e) => Some(Err(e)),
         }
     }
-    pub fn make_derivation_message(metadata: DerivationMetadata) -> serde_json::error::Result<String> {
+    pub fn make_derivation_message(
+        metadata: &DerivationMetadata,
+    ) -> serde_json::error::Result<String> {
         let base = DERIVATION_COMMENT.to_string();
         let serialized = metadata.to_json()?;
         Ok(base + serialized.as_str())
