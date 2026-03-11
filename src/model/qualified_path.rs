@@ -132,7 +132,7 @@ impl QualifiedPath {
         }
     }
     pub fn push<S: Into<String>>(&mut self, path: S) {
-        let qualified_str = path.into().replace("*", "").replace("_", "");
+        let qualified_str = path.into().replace("_", "");
         for split in qualified_str.trim().split(SEPARATOR) {
             self.path.push(split.to_string());
         }

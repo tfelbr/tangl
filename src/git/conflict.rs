@@ -189,14 +189,13 @@ impl<'a> ConflictChecker<'a> {
 
     pub fn check_k_permutations(
         &self,
-        paths: Vec<&NodePath<BranchAble>>,
+        paths: &Vec<NodePath<BranchAble>>,
         k: usize,
-    ) -> Result<impl Iterator<Item = ConflictStatistic>, GitError> {
-        let iterator = paths.into_iter().permutations(k).map(|perm| {
-            let statistic = self.check_chain(perm.clone());
-            self.build_statistic(perm, statistic)
+    ) -> impl Iterator<Item = ConflictStatistic> {
+        let iterator = paths.iter().permutations(k).map(|perm| {
+            self.check_chain_and_build_statistic(&perm)
         });
-        Ok(iterator)
+        iterator
     }
 
     pub fn check_permutations_against_base(
@@ -204,22 +203,57 @@ impl<'a> ConflictChecker<'a> {
         targets: &Vec<NodePath<BranchAble>>,
         base: &NodePath<BranchAble>,
         k: usize,
-    ) -> Result<impl Iterator<Item = ConflictStatistic>, GitError> {
+    ) -> impl Iterator<Item = ConflictStatistic> {
         let iterator = targets.iter().permutations(k).map(|target| {
             let mut to_check: Vec<&NodePath<BranchAble>> = vec![];
             to_check.push(base);
             to_check.extend(target);
-            let statistic = self.check_chain(to_check.clone());
-            self.build_statistic(to_check, statistic)
+            self.check_chain_and_build_statistic(&to_check)
         });
-        Ok(iterator)
+        iterator
+    }
+
+    pub fn check_by_order(&self, paths: &Vec<NodePath<BranchAble>>) -> ConflictStatistic {
+        let chain: Vec<&NodePath<BranchAble>> = paths.iter().collect();
+        self.check_chain_and_build_statistic(&chain)
+    }
+
+    pub fn check_n_against_permutations(
+        &self,
+        n: &'a Vec<NodePath<BranchAble>>,
+        against: &'a Vec<NodePath<BranchAble>>,
+        k: &'a usize,
+    ) -> impl Iterator<Item = ConflictStatistic> {
+        // I don't know why, but k has to be borrowed here
+        let iterator = n
+            .iter()
+            .map(|path| {
+               against
+                    .iter()
+                    .combinations(*k)
+                    .map(|mut combination| {
+                        combination.push(path);
+                        combination
+                            .iter()
+                            .permutations(*k+1)
+                            .map(|permutations| {
+                                let dereferenced = permutations
+                                    .iter()
+                                    .map(|permutation| **permutation)
+                                    .collect::<Vec<_>>();
+                                self.check_chain_and_build_statistic(&dereferenced)
+                            }).collect::<Vec<_>>()
+                    }).flatten()
+            })
+            .flatten();
+        iterator
     }
 
     pub fn clean_up(&mut self) {}
 
     fn check_chain(
         &self,
-        chain: Vec<&NodePath<BranchAble>>,
+        chain: &Vec<&NodePath<BranchAble>>,
     ) -> Result<(Option<usize>, Vec<usize>), GitError> {
         if chain.len() < 2 {
             panic!("Chain has to contain at least 2 paths")
@@ -227,17 +261,17 @@ impl<'a> ConflictChecker<'a> {
         let mut failed_at: Option<usize> = None;
         let mut tested: Vec<usize> = vec![];
         let current_path = self.interface.get_current_node_path()?;
-        let base = &chain[0];
+        let base = chain[0];
         self.interface.checkout(base)?;
         let temporary = QualifiedPath::from("tmp");
         self.interface.create_branch_no_mut(&temporary)?;
         self.interface.checkout_raw(&temporary)?;
         for (index, path) in chain[1..].iter().enumerate() {
+            tested.push(index + 1);
             let success = self.interface.merge(path)?.status.success();
             if !success {
                 self.interface.abort_merge()?;
                 failed_at = Some(index + 1);
-                tested.push(index + 1);
                 break;
             }
         }
@@ -248,7 +282,7 @@ impl<'a> ConflictChecker<'a> {
 
     fn build_statistic(
         &self,
-        paths: Vec<&NodePath<BranchAble>>,
+        paths: &Vec<&NodePath<BranchAble>>,
         result: Result<(Option<usize>, Vec<usize>), GitError>,
     ) -> ConflictStatistic {
         let dereferenced = paths.into_iter().map(|p| p.to_qualified_path()).collect();
@@ -268,6 +302,11 @@ impl<'a> ConflictChecker<'a> {
                 error: e,
             }),
         }
+    }
+
+    fn check_chain_and_build_statistic(&self, chain: &Vec<&NodePath<BranchAble>>) -> ConflictStatistic {
+        let result = self.check_chain(chain);
+        self.build_statistic(chain, result)
     }
 }
 
@@ -429,7 +468,7 @@ impl<'a> ConflictAnalyzer<'a> {
         self.context.debug("Checking against base pairwise");
         for s in self
             .checker
-            .check_permutations_against_base(paths, base, 1)?
+            .check_permutations_against_base(paths, base, 1)
         {
             self.context.debug(s.display_as_path());
             match s {
@@ -454,7 +493,7 @@ impl<'a> ConflictAnalyzer<'a> {
         self.context.debug("Checking successful against base");
         for with_base in
             self.checker
-                .check_permutations_against_base(&to_test_with_base, &base, 2)?
+                .check_permutations_against_base(&to_test_with_base, &base, 2)
         {
             self.context.debug(with_base.display_as_path());
             let altered: ConflictStatistic = match with_base {

@@ -4,6 +4,7 @@ use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 
 pub trait ValidNodeType: Clone + Debug {
+    fn identifier() -> String;
     fn is_compatible(node_type: &NodeType) -> bool {
         Self::is_compatible_to_node_type(node_type)
     }
@@ -30,6 +31,10 @@ impl Error for WrongNodeTypeError {}
 #[derive(Clone, Debug)]
 pub struct Feature;
 impl ValidNodeType for Feature {
+    fn identifier() -> String {
+        "feature".to_string()
+    }
+
     fn is_compatible_to_node_type(node_type: &NodeType) -> bool {
         match node_type {
             NodeType::Feature => true,
@@ -42,6 +47,10 @@ impl CanHaveBranch for Feature {}
 #[derive(Clone, Debug)]
 pub struct FeatureRoot;
 impl ValidNodeType for FeatureRoot {
+    fn identifier() -> String {
+        "feature root".to_string()
+    }
+
     fn is_compatible_to_node_type(node_type: &NodeType) -> bool {
         match node_type {
             NodeType::FeatureRoot => true,
@@ -53,6 +62,10 @@ impl ValidNodeType for FeatureRoot {
 #[derive(Clone, Debug)]
 pub struct Product;
 impl ValidNodeType for Product {
+    fn identifier() -> String {
+        "product".to_string()
+    }
+
     fn is_compatible_to_node_type(node_type: &NodeType) -> bool {
         match node_type {
             NodeType::Product => true,
@@ -65,6 +78,10 @@ impl CanHaveBranch for Product {}
 #[derive(Clone, Debug)]
 pub struct ProductRoot;
 impl ValidNodeType for ProductRoot {
+    fn identifier() -> String {
+        "product root".to_string()
+    }
+
     fn is_compatible_to_node_type(node_type: &NodeType) -> bool {
         match node_type {
             NodeType::ProductRoot => true,
@@ -76,6 +93,10 @@ impl ValidNodeType for ProductRoot {
 #[derive(Clone, Debug)]
 pub struct Area;
 impl ValidNodeType for Area {
+    fn identifier() -> String {
+        "area".to_string()
+    }
+
     fn is_compatible_to_node_type(node_type: &NodeType) -> bool {
         match node_type {
             NodeType::Area => true,
@@ -88,6 +109,10 @@ impl CanHaveBranch for Area {}
 #[derive(Clone, Debug)]
 pub struct VirtualRoot;
 impl ValidNodeType for VirtualRoot {
+    fn identifier() -> String {
+        "virtual root".to_string()
+    }
+
     fn is_compatible_to_node_type(node_type: &NodeType) -> bool {
         match node_type {
             NodeType::VirtualRoot => true,
@@ -99,6 +124,10 @@ impl ValidNodeType for VirtualRoot {
 #[derive(Clone, Debug)]
 pub struct Tag;
 impl ValidNodeType for Tag {
+    fn identifier() -> String {
+        "tag".to_string()
+    }
+
     fn is_compatible_to_node_type(node_type: &NodeType) -> bool {
         match node_type {
             NodeType::Tag => true,
@@ -111,6 +140,10 @@ impl CanHaveBranch for Tag {}
 #[derive(Clone, Debug)]
 pub struct AnyNode;
 impl ValidNodeType for AnyNode {
+    fn identifier() -> String {
+        "any".to_string()
+    }
+
     fn is_compatible_to_node_type(_node_type: &NodeType) -> bool {
         true
     }
@@ -119,6 +152,10 @@ impl ValidNodeType for AnyNode {
 #[derive(Clone, Debug)]
 pub struct BranchAble;
 impl ValidNodeType for BranchAble {
+    fn identifier() -> String {
+        "branch able".to_string()
+    }
+
     fn is_compatible_to_node_type(node_type: &NodeType) -> bool {
         match node_type {
             NodeType::Feature | NodeType::Product | NodeType::Area => true,

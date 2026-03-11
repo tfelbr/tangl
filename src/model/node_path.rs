@@ -97,7 +97,7 @@ impl NodePath<FeatureRoot> {
             .map(|p| p.try_as_concrete_type().unwrap())
     }
     pub fn iter_features_req(&self) -> impl Iterator<Item = NodePath<Feature>> {
-        self.iter_children()
+        self.iter_children_req()
             .map(|p| p.try_as_concrete_type().unwrap())
     }
 }
@@ -185,8 +185,11 @@ impl<T: ValidNodeType> NodePathBasicNavigation for NodePath<T> {
     }
 }
 
-impl<T: ValidNodeType> PartialEq for NodePath<T> {
-    fn eq(&self, other: &Self) -> bool {
+impl<A, B> PartialEq<NodePath<A>> for NodePath<B>
+where A: ValidNodeType,
+B: ValidNodeType,
+{
+    fn eq(&self, other: &NodePath<A>) -> bool {
         self.to_qualified_path() == other.to_qualified_path()
     }
 }

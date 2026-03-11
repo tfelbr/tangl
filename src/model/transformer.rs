@@ -1,5 +1,5 @@
-use crate::model::{AnyNode, NodePath, QualifiedPath, ToQualifiedPath, ValidNodeType};
-use std::fmt::Debug;
+use crate::model::*;
+use globset::{GlobBuilder, GlobMatcher};
 
 pub trait NodePathTransformer<A, B>
 where
@@ -19,6 +19,7 @@ pub enum NodePathTransformers {
     ChainingNodePathTransformer(ChainingNodePathTransformer),
     HasBranchFilteringNodePathTransformer(HasBranchFilteringNodePathTransformer),
     ByQPathFilteringNodePathTransformer(ByQPathFilteringNodePathTransformer),
+    ByGlobFilteringNodePathTransformer(ByGlobFilteringNodePathTransformer)
 }
 impl NodePathTransformer<AnyNode, AnyNode> for NodePathTransformers {
     fn apply(&self, node_path: NodePath<AnyNode>) -> Option<NodePath<AnyNode>> {
@@ -26,6 +27,7 @@ impl NodePathTransformer<AnyNode, AnyNode> for NodePathTransformers {
             NodePathTransformers::ChainingNodePathTransformer(t) => t.apply(node_path),
             NodePathTransformers::HasBranchFilteringNodePathTransformer(t) => t.apply(node_path),
             NodePathTransformers::ByQPathFilteringNodePathTransformer(t) => t.apply(node_path),
+            NodePathTransformers::ByGlobFilteringNodePathTransformer(t) => t.apply(node_path),
         }
     }
 }
@@ -66,36 +68,65 @@ impl<A: ValidNodeType> NodePathTransformer<A, A> for HasBranchFilteringNodePathT
     }
 }
 
-pub enum QPathFilteringMode {
+pub enum FilteringMode {
     INCLUDE,
     EXCLUDE,
 }
 pub struct ByQPathFilteringNodePathTransformer {
     paths: Vec<QualifiedPath>,
-    mode: QPathFilteringMode,
+    mode: FilteringMode,
 }
 impl ByQPathFilteringNodePathTransformer {
-    pub fn new(paths: Vec<QualifiedPath>, mode: QPathFilteringMode) -> Self {
+    pub fn new(paths: Vec<QualifiedPath>, mode: FilteringMode) -> Self {
         Self { paths, mode }
     }
 }
 impl<A: ValidNodeType> NodePathTransformer<A, A> for ByQPathFilteringNodePathTransformer {
     fn apply(&self, node_path: NodePath<A>) -> Option<NodePath<A>> {
         match self.mode {
-            QPathFilteringMode::INCLUDE => {
+            FilteringMode::INCLUDE => {
                 if self.paths.contains(&node_path.to_qualified_path()) {
                     Some(node_path)
                 } else {
                     None
                 }
             }
-            QPathFilteringMode::EXCLUDE => {
+            FilteringMode::EXCLUDE => {
                 if self.paths.contains(&node_path.to_qualified_path()) {
                     None
                 } else {
                     Some(node_path)
                 }
             }
+        }
+    }
+}
+
+pub struct ByGlobFilteringNodePathTransformer {
+    globs: Vec<GlobMatcher>,
+    filtering_mode: FilteringMode,
+}
+impl ByGlobFilteringNodePathTransformer {
+    pub fn new(globs: &Vec<QualifiedPath>, filtering_mode: FilteringMode) -> Result<Self, globset::Error> {
+        let mut built = Vec::new();
+        for glob in globs {
+            built.push(GlobBuilder::new(glob.to_string().as_str()).build()?.compile_matcher());
+        }
+        Ok(Self {
+            globs: built,
+            filtering_mode,
+        })
+    }
+}
+impl NodePathTransformer<AnyNode, AnyNode> for ByGlobFilteringNodePathTransformer {
+    fn apply(&self, node_path: NodePath<AnyNode>) -> Option<NodePath<AnyNode>> {
+        let mut found_match = false;
+        for glob in self.globs.iter() {
+            if glob.is_match(&node_path.to_string()) { found_match = true }
+        }
+        match self.filtering_mode {
+            FilteringMode::INCLUDE => if found_match { Some(node_path) } else { None },
+            FilteringMode::EXCLUDE => if found_match { None } else { Some(node_path) },
         }
     }
 }
@@ -123,7 +154,7 @@ mod tests {
             NodePathTransformers::ByQPathFilteringNodePathTransformer(
                 ByQPathFilteringNodePathTransformer::new(
                     vec![QualifiedPath::from("/main/feature/root")],
-                    QPathFilteringMode::EXCLUDE,
+                    FilteringMode::EXCLUDE,
                 ),
             ),
             NodePathTransformers::HasBranchFilteringNodePathTransformer(
@@ -143,7 +174,7 @@ mod tests {
         let model = prepare_model();
         let transformer = ByQPathFilteringNodePathTransformer::new(
             vec![QualifiedPath::from("/main/feature/root")],
-            QPathFilteringMode::INCLUDE,
+            FilteringMode::INCLUDE,
         );
         let root = model.get_virtual_root();
         let actual = transformer
@@ -158,7 +189,7 @@ mod tests {
         let model = prepare_model();
         let transformer = ByQPathFilteringNodePathTransformer::new(
             vec![QualifiedPath::from("/main/feature/root")],
-            QPathFilteringMode::EXCLUDE,
+            FilteringMode::EXCLUDE,
         );
         let root = model.get_virtual_root();
         let actual = transformer

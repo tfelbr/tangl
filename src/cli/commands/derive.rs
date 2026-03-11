@@ -124,7 +124,9 @@ fn get_next_state(
         _ => unreachable!(),
     };
     if first {
-        context.git.empty_commit(DerivationCommit::make_derivation_message(&state)?.as_str())?;
+        context
+            .git
+            .empty_commit(DerivationCommit::make_derivation_message(&state)?.as_str())?;
     }
 
     let mut original_order: Vec<NodePath<Feature>> = vec![];
@@ -415,7 +417,7 @@ impl CommandInterface for DeriveCommand {
                         NodePathTransformers::ByQPathFilteringNodePathTransformer(
                             ByQPathFilteringNodePathTransformer::new(
                                 to_filter,
-                                QPathFilteringMode::EXCLUDE,
+                                FilteringMode::EXCLUDE,
                             ),
                         ),
                     ]);
