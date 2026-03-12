@@ -7,10 +7,9 @@ use std::error::Error;
 
 fn add_feature(feature: QualifiedPath, context: &mut CommandContext) -> Result<(), Box<dyn Error>> {
     let node_path = context.git.get_current_node_path()?;
-    let current_path = if let Some(path) = node_path.as_any_type().try_as_concrete_type::<Feature>()
-    {
+    let current_path = if let Some(path) = node_path.as_any_type().try_convert_to::<Feature>() {
         path.to_qualified_path()
-    } else if let Some(path) = node_path.as_any_type().try_as_concrete_type::<Area>() {
+    } else if let Some(path) = node_path.as_any_type().try_convert_to::<Area>() {
         path.get_path_to_feature_root()
     } else {
         return Err(Box::new(CommandError::new(
@@ -34,7 +33,7 @@ fn delete_feature(
     let complete_path = area.get_path_to_feature_root() + feature;
     let node_path = context.git.get_model().get_node_path(&complete_path);
     if let Some(path) = node_path {
-        if let Some(feature) = path.as_any_type().try_as_concrete_type::<Feature>() {
+        if let Some(feature) = path.as_any_type().try_convert_to::<Feature>() {
             let output = context.git.delete_branch(feature)?;
             if output.status.success() {
                 context.info(format!(

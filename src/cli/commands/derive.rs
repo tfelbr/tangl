@@ -136,7 +136,7 @@ fn get_next_state(
             .get_model()
             .get_node_path(&missing.get_qualified_path())
         {
-            original_order.push(path.try_as_concrete_type().unwrap());
+            original_order.push(path.try_convert_to().unwrap());
         } else {
             return Err(format!(
                 "Cannot commence derivation: feature {} does not exist in current working tree",
@@ -248,7 +248,7 @@ fn handle_derivation(
                 .get_model()
                 .get_node_path(&progress.get_missing()[0].get_qualified_path())
                 .unwrap()
-                .try_as_concrete_type::<Feature>()
+                .try_convert_to::<Feature>()
                 .unwrap();
             context.info(format!(
                 "\nNow merging:\n\n   {}",
@@ -275,7 +275,7 @@ fn assert_features_exist(
     let mut paths: Vec<NodePath<Feature>> = vec![];
     for feature in features.iter() {
         if let Some(path) = git.get_model().get_node_path(feature) {
-            if let Some(f) = path.try_as_concrete_type::<Feature>() {
+            if let Some(f) = path.try_convert_to::<Feature>() {
                 paths.push(f);
             } else {
                 return Err(format!("Path {} is not a feature", feature.to_string().red()).into());
@@ -329,7 +329,7 @@ impl CommandInterface for DeriveCommand {
     fn run_command(&self, context: &mut CommandContext) -> Result<(), Box<dyn Error>> {
         let current_area = context.git.get_current_area()?;
         let current_path = context.git.get_current_node_path()?;
-        let product_path = match current_path.as_any_type().try_as_concrete_type::<Product>() {
+        let product_path = match current_path.as_any_type().try_convert_to::<Product>() {
             Some(path) => path,
             _ => {
                 return Err(format!(

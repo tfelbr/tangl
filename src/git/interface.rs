@@ -14,6 +14,7 @@ pub enum GitPath {
 #[derive(Clone, Debug)]
 pub(super) struct GitCLI {
     path: GitPath,
+    colored: bool,
 }
 impl GitCLI {
     pub fn in_current_directory() -> Self {
@@ -23,7 +24,13 @@ impl GitCLI {
         Self::new(GitPath::CustomDirectory(path))
     }
     pub fn new(path: GitPath) -> Self {
-        Self { path }
+        Self {
+            path,
+            colored: false,
+        }
+    }
+    pub fn colored(&mut self, colored: bool) {
+        self.colored = colored;
     }
     pub fn run(&self, args: Vec<&str>) -> io::Result<Output> {
         let mut base = Command::new("git");
@@ -34,6 +41,10 @@ impl GitCLI {
                 arguments.push(format!("--git-dir={}/.git", path.to_str().unwrap()));
                 arguments.push(format!("--work-tree={}", path.to_str().unwrap()));
             }
+        }
+        if self.colored {
+            arguments.push("-c".to_string());
+            arguments.push("color.ui=always".to_string());
         }
         let mut transformed: Vec<&str> = arguments.iter().map(|s| s.as_str()).collect();
         transformed.extend(args);
@@ -63,6 +74,9 @@ impl GitInterface {
             Ok(_) => interface,
             Err(e) => panic!("{:?}", e),
         }
+    }
+    pub fn colored_output(&mut self, color: bool) {
+        self.raw_git_interface.colored(color);
     }
     fn update_complete_model(&mut self) -> Result<(), GitError> {
         let branch_output = self.raw_git_interface.run(vec!["branch"])?;
@@ -113,7 +127,7 @@ impl GitInterface {
             .model
             .get_node_path(&current_qualified_path)
             .unwrap()
-            .try_as_concrete_type()
+            .try_convert_to()
             .unwrap())
     }
     pub fn get_current_area(&self) -> Result<NodePath<Area>, GitError> {

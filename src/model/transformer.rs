@@ -3,8 +3,8 @@ use globset::{GlobBuilder, GlobMatcher};
 
 pub trait NodePathTransformer<A, B>
 where
-    A: ValidNodeType,
-    B: ValidNodeType,
+    A: SymbolicNodeType,
+    B: SymbolicNodeType,
 {
     fn apply(&self, node_path: NodePath<A>) -> Option<NodePath<B>>;
     fn transform(
@@ -19,7 +19,7 @@ pub enum NodePathTransformers {
     ChainingNodePathTransformer(ChainingNodePathTransformer),
     HasBranchFilteringNodePathTransformer(HasBranchFilteringNodePathTransformer),
     ByQPathFilteringNodePathTransformer(ByQPathFilteringNodePathTransformer),
-    ByGlobFilteringNodePathTransformer(ByGlobFilteringNodePathTransformer)
+    ByGlobFilteringNodePathTransformer(ByGlobFilteringNodePathTransformer),
 }
 impl NodePathTransformer<AnyNode, AnyNode> for NodePathTransformers {
     fn apply(&self, node_path: NodePath<AnyNode>) -> Option<NodePath<AnyNode>> {
@@ -58,7 +58,7 @@ impl HasBranchFilteringNodePathTransformer {
         Self { has_branch }
     }
 }
-impl<A: ValidNodeType> NodePathTransformer<A, A> for HasBranchFilteringNodePathTransformer {
+impl<A: SymbolicNodeType> NodePathTransformer<A, A> for HasBranchFilteringNodePathTransformer {
     fn apply(&self, node_path: NodePath<A>) -> Option<NodePath<A>> {
         if node_path.get_metadata().has_branch() == self.has_branch {
             Some(node_path)
@@ -81,7 +81,7 @@ impl ByQPathFilteringNodePathTransformer {
         Self { paths, mode }
     }
 }
-impl<A: ValidNodeType> NodePathTransformer<A, A> for ByQPathFilteringNodePathTransformer {
+impl<A: SymbolicNodeType> NodePathTransformer<A, A> for ByQPathFilteringNodePathTransformer {
     fn apply(&self, node_path: NodePath<A>) -> Option<NodePath<A>> {
         match self.mode {
             FilteringMode::INCLUDE => {
@@ -107,10 +107,17 @@ pub struct ByGlobFilteringNodePathTransformer {
     filtering_mode: FilteringMode,
 }
 impl ByGlobFilteringNodePathTransformer {
-    pub fn new(globs: &Vec<QualifiedPath>, filtering_mode: FilteringMode) -> Result<Self, globset::Error> {
+    pub fn new(
+        globs: &Vec<QualifiedPath>,
+        filtering_mode: FilteringMode,
+    ) -> Result<Self, globset::Error> {
         let mut built = Vec::new();
         for glob in globs {
-            built.push(GlobBuilder::new(glob.to_string().as_str()).build()?.compile_matcher());
+            built.push(
+                GlobBuilder::new(glob.to_string().as_str())
+                    .build()?
+                    .compile_matcher(),
+            );
         }
         Ok(Self {
             globs: built,
@@ -122,11 +129,25 @@ impl NodePathTransformer<AnyNode, AnyNode> for ByGlobFilteringNodePathTransforme
     fn apply(&self, node_path: NodePath<AnyNode>) -> Option<NodePath<AnyNode>> {
         let mut found_match = false;
         for glob in self.globs.iter() {
-            if glob.is_match(&node_path.to_string()) { found_match = true }
+            if glob.is_match(&node_path.to_string()) {
+                found_match = true
+            }
         }
         match self.filtering_mode {
-            FilteringMode::INCLUDE => if found_match { Some(node_path) } else { None },
-            FilteringMode::EXCLUDE => if found_match { None } else { Some(node_path) },
+            FilteringMode::INCLUDE => {
+                if found_match {
+                    Some(node_path)
+                } else {
+                    None
+                }
+            }
+            FilteringMode::EXCLUDE => {
+                if found_match {
+                    None
+                } else {
+                    Some(node_path)
+                }
+            }
         }
     }
 }

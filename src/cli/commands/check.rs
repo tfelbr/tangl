@@ -1,7 +1,11 @@
 use crate::cli::completion::CompletionHelper;
 use crate::cli::*;
 use crate::git::conflict::{ConflictChecker, ConflictStatistics};
-use crate::model::{BranchAble, ByGlobFilteringNodePathTransformer, ChainingNodePathTransformer, Feature, FeatureMetadata, FilteringMode, HasBranchFilteringNodePathTransformer, NodePath, NodePathTransformer, NodePathTransformers, Product, QualifiedPath, ToQualifiedPath};
+use crate::model::{
+    BranchAble, ByGlobFilteringNodePathTransformer, ChainingNodePathTransformer, Feature,
+    FeatureMetadata, FilteringMode, HasBranchFilteringNodePathTransformer, NodePath,
+    NodePathTransformer, NodePathTransformers, Product, QualifiedPath, ToQualifiedPath,
+};
 use clap::{Arg, ArgAction, Command};
 use colored::Colorize;
 use std::error::Error;
@@ -23,24 +27,29 @@ fn run_checks(
     if paths.len() < 2 {
         return Err("At least two paths are required to perform merge tests".into());
     }
-    let statistics: ConflictStatistics = match (permutations, perm_to_base, by_order, test_one_to_n) {
+    let statistics: ConflictStatistics = match (permutations, perm_to_base, by_order, test_one_to_n)
+    {
         (None, None, false, false) => return Err("Please choose a test strategy".into()),
         (Some(permutations), None, false, false) => {
             checker.check_k_permutations(paths, permutations).collect()
-        },
+        }
         (None, Some(permutations), false, false) => {
             let base = paths.get(0).unwrap().clone();
             let rest = paths[1..].to_vec();
-            checker.check_permutations_against_base(&rest, &base, permutations).collect()
+            checker
+                .check_permutations_against_base(&rest, &base, permutations)
+                .collect()
         }
         (None, None, true, false) => {
             ConflictStatistics::from_iter(vec![checker.check_by_order(paths)].into_iter())
-        },
+        }
         (None, None, false, true) => {
             let first = paths.first().unwrap().clone();
             let rest = paths[1..].to_vec();
-            checker.check_n_against_permutations(&vec![first], &rest, &1).collect()
-        },
+            checker
+                .check_n_against_permutations(&vec![first], &rest, &1)
+                .collect()
+        }
         _ => unreachable!(),
     };
     Ok(statistics)
@@ -91,7 +100,7 @@ impl CommandDefinition for CheckCommand {
                     .conflicts_with_all(&[BY_ORDER, PERMUTATIONS, ONE_TO_N])
                     .help(
                         "The most left path is the base; all other paths are permutated \
-                        and tested against the base"
+                        and tested against the base",
                     ),
             )
     }
@@ -103,7 +112,8 @@ impl CommandInterface for CheckCommand {
             .arg_helper
             .get_argument_values::<String>(&PATHS)
             .unwrap_or(Vec::new())
-            .iter().map(|p| QualifiedPath::from(p))
+            .iter()
+            .map(|p| QualifiedPath::from(p))
             .collect::<Vec<_>>();
         let permutations = context
             .arg_helper
@@ -121,40 +131,49 @@ impl CommandInterface for CheckCommand {
             .unwrap();
         let checker = ConflictChecker::new(&context.git);
 
-        let statistics: ConflictStatistics = if paths.is_empty() && permutations.is_none() && perm_to_base.is_none() && !by_order && !one_to_n {
+        let statistics: ConflictStatistics = if paths.is_empty()
+            && permutations.is_none()
+            && perm_to_base.is_none()
+            && !by_order
+            && !one_to_n
+        {
             let current_path = context.git.get_current_node_path()?;
             let current_any = current_path.as_any_type();
-            if current_any.try_as_concrete_type::<Feature>().is_some() {
-                let feature_root = context.git.get_current_area()?.move_to_feature_root().unwrap();
+            if current_any.try_convert_to::<Feature>().is_some() {
+                let feature_root = context
+                    .git
+                    .get_current_area()?
+                    .move_to_feature_root()
+                    .unwrap();
                 let mut paths = vec![current_path.clone()];
-                paths.extend(
-                    feature_root
-                        .iter_features_req()
-                        .filter_map(|path| {
-                            if &path == &current_path { None }
-                            else { Some(path.as_branch_able()) }
-                        })
-                );
+                paths.extend(feature_root.iter_features_req().filter_map(|path| {
+                    if &path == &current_path {
+                        None
+                    } else {
+                        Some(path.as_branch_able())
+                    }
+                }));
                 run_checks(&paths, None, None, false, true, &checker)?
-
-            } else if let Some(product) = current_any.try_as_concrete_type::<Product>() {
+            } else if let Some(product) = current_any.try_convert_to::<Product>() {
                 let derivation_commits = context.git.get_derivation_commits(&product)?;
                 let maybe_last = derivation_commits.first();
-                if maybe_last.is_none() { return Err("Nothing to check against: product not derived yet".into()) }
+                if maybe_last.is_none() {
+                    return Err("Nothing to check against: product not derived yet".into());
+                }
                 let feature_meta = maybe_last.unwrap().get_metadata().get_total();
                 let features = FeatureMetadata::qualified_paths(feature_meta);
-                let node_paths = context.git.get_model().assert_all::<BranchAble>(&features)?;
+                let node_paths = context
+                    .git
+                    .get_model()
+                    .assert_all::<BranchAble>(&features)?;
                 let mut final_paths: Vec<NodePath<BranchAble>> = vec![product.as_branch_able()];
                 final_paths.extend(node_paths);
                 run_checks(&final_paths, None, Some(1), false, false, &checker)?
-
             } else {
-                return Err(
-                    "No default available for current node type\n\
-                    Please supply test paths and a strategy".into()
-                )
+                return Err("No default available for current node type\n\
+                    Please supply test paths and a strategy"
+                    .into());
             }
-
         } else {
             let current_path = context.git.get_current_qualified_path()?;
             let transformed_paths: Vec<QualifiedPath> = paths
@@ -162,7 +181,10 @@ impl CommandInterface for CheckCommand {
                 .map(|path| current_path.clone() + path.clone())
                 .collect();
             let filter1 = HasBranchFilteringNodePathTransformer::new(true);
-            let filter2 = ByGlobFilteringNodePathTransformer::new(&transformed_paths, FilteringMode::INCLUDE)?;
+            let filter2 = ByGlobFilteringNodePathTransformer::new(
+                &transformed_paths,
+                FilteringMode::INCLUDE,
+            )?;
             let node_finder = ChainingNodePathTransformer::new(vec![
                 NodePathTransformers::HasBranchFilteringNodePathTransformer(filter1),
                 NodePathTransformers::ByGlobFilteringNodePathTransformer(filter2),
@@ -171,7 +193,7 @@ impl CommandInterface for CheckCommand {
             let iterator = root.iter_children_req();
             let final_paths: Vec<NodePath<BranchAble>> = node_finder
                 .transform(iterator)
-                .map(|path| path.try_as_concrete_type::<BranchAble>().unwrap())
+                .map(|path| path.try_convert_to::<BranchAble>().unwrap())
                 .collect();
             let perm: Option<usize> = match permutations {
                 Some(p) => Some(p.parse()?),

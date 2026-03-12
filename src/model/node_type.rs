@@ -3,14 +3,14 @@ use colored::{ColoredString, Colorize};
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 
-pub trait ValidNodeType: Clone + Debug {
+pub trait SymbolicNodeType: Clone + Debug {
     fn identifier() -> String;
     fn is_compatible(node_type: &NodeType) -> bool {
         Self::is_compatible_to_node_type(node_type)
     }
     fn is_compatible_to_node_type(node_type: &NodeType) -> bool;
 }
-pub trait CanHaveBranch: ValidNodeType {}
+pub trait CanHaveBranch: SymbolicNodeType {}
 
 #[derive(Debug, Clone)]
 pub struct WrongNodeTypeError {
@@ -30,9 +30,9 @@ impl Error for WrongNodeTypeError {}
 
 #[derive(Clone, Debug)]
 pub struct Feature;
-impl ValidNodeType for Feature {
+impl SymbolicNodeType for Feature {
     fn identifier() -> String {
-        "feature".to_string()
+        NodeType::Feature.get_type_name()
     }
 
     fn is_compatible_to_node_type(node_type: &NodeType) -> bool {
@@ -46,9 +46,9 @@ impl CanHaveBranch for Feature {}
 
 #[derive(Clone, Debug)]
 pub struct FeatureRoot;
-impl ValidNodeType for FeatureRoot {
+impl SymbolicNodeType for FeatureRoot {
     fn identifier() -> String {
-        "feature root".to_string()
+        NodeType::FeatureRoot.get_type_name()
     }
 
     fn is_compatible_to_node_type(node_type: &NodeType) -> bool {
@@ -61,9 +61,9 @@ impl ValidNodeType for FeatureRoot {
 
 #[derive(Clone, Debug)]
 pub struct Product;
-impl ValidNodeType for Product {
+impl SymbolicNodeType for Product {
     fn identifier() -> String {
-        "product".to_string()
+        NodeType::Product.get_type_name()
     }
 
     fn is_compatible_to_node_type(node_type: &NodeType) -> bool {
@@ -77,9 +77,9 @@ impl CanHaveBranch for Product {}
 
 #[derive(Clone, Debug)]
 pub struct ProductRoot;
-impl ValidNodeType for ProductRoot {
+impl SymbolicNodeType for ProductRoot {
     fn identifier() -> String {
-        "product root".to_string()
+        NodeType::ProductRoot.get_type_name()
     }
 
     fn is_compatible_to_node_type(node_type: &NodeType) -> bool {
@@ -92,9 +92,9 @@ impl ValidNodeType for ProductRoot {
 
 #[derive(Clone, Debug)]
 pub struct Area;
-impl ValidNodeType for Area {
+impl SymbolicNodeType for Area {
     fn identifier() -> String {
-        "area".to_string()
+        NodeType::Area.get_type_name()
     }
 
     fn is_compatible_to_node_type(node_type: &NodeType) -> bool {
@@ -108,9 +108,9 @@ impl CanHaveBranch for Area {}
 
 #[derive(Clone, Debug)]
 pub struct VirtualRoot;
-impl ValidNodeType for VirtualRoot {
+impl SymbolicNodeType for VirtualRoot {
     fn identifier() -> String {
-        "virtual root".to_string()
+        NodeType::VirtualRoot.get_type_name()
     }
 
     fn is_compatible_to_node_type(node_type: &NodeType) -> bool {
@@ -123,9 +123,9 @@ impl ValidNodeType for VirtualRoot {
 
 #[derive(Clone, Debug)]
 pub struct Tag;
-impl ValidNodeType for Tag {
+impl SymbolicNodeType for Tag {
     fn identifier() -> String {
-        "tag".to_string()
+        NodeType::Tag.get_type_name()
     }
 
     fn is_compatible_to_node_type(node_type: &NodeType) -> bool {
@@ -139,7 +139,7 @@ impl CanHaveBranch for Tag {}
 
 #[derive(Clone, Debug)]
 pub struct AnyNode;
-impl ValidNodeType for AnyNode {
+impl SymbolicNodeType for AnyNode {
     fn identifier() -> String {
         "any".to_string()
     }
@@ -151,7 +151,7 @@ impl ValidNodeType for AnyNode {
 
 #[derive(Clone, Debug)]
 pub struct BranchAble;
-impl ValidNodeType for BranchAble {
+impl SymbolicNodeType for BranchAble {
     fn identifier() -> String {
         "branch able".to_string()
     }
@@ -202,10 +202,31 @@ impl NodeType {
 
     pub fn format_node_display(&self, name: ColoredString) -> ColoredString {
         match self {
-            Self::FeatureRoot => name.bright_purple().bold(),
-            Self::ProductRoot => name.red().bold(),
+            Self::Area => name.yellow().bold(),
+            Self::FeatureRoot => name.bright_purple().bold().underline(),
+            Self::Feature => name.bright_purple(),
+            Self::ProductRoot => name.red().bold().italic(),
+            Self::Product => name.red(),
             Self::Tag => name.green(),
             _ => name,
         }
+    }
+
+    pub fn get_type_name(&self) -> String {
+        let name: &str = match self {
+            Self::VirtualRoot => "virtual root",
+            Self::Area => "area",
+            Self::FeatureRoot => "feature root",
+            Self::ProductRoot => "product root",
+            Self::Feature => "feature",
+            Self::Product => "product",
+            Self::Tag => "tag",
+        };
+        name.to_string()
+    }
+
+    pub fn get_formatted_name(&self) -> String {
+        self.format_node_display(self.get_type_name().normal())
+            .to_string()
     }
 }

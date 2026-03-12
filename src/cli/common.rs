@@ -1,4 +1,5 @@
 use clap::{Arg, ArgAction};
+use colored::Colorize;
 
 pub const VERBOSE: &str = "verbose";
 
@@ -23,4 +24,8 @@ pub fn verbose() -> Arg {
             "Set verbosity of output. \
             Verbosity increases with number of occurrences.",
         )
+}
+
+pub fn format_command_help<S: Into<String>>(command: S) -> String {
+    command.into().purple().to_string()
 }

@@ -24,7 +24,7 @@ impl CommandInterface for CheckoutCommand {
         let full_target = context.git.get_current_qualified_path()? + QualifiedPath::from(branch);
         let maybe_node_path = context.git.get_model().get_node_path(&full_target);
         if let Some(node_path) = maybe_node_path {
-            let maybe_concrete = node_path.try_as_concrete_type::<BranchAble>();
+            let maybe_concrete = node_path.try_convert_to::<BranchAble>();
             if let Some(concrete_branch) = maybe_concrete {
                 let result = context.git.checkout(&concrete_branch)?;
                 context.log_from_output(&result);

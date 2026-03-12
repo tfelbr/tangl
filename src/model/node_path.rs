@@ -15,7 +15,7 @@ where
     Self: Sized,
 {
     fn move_to_feature(self, path: &QualifiedPath) -> Option<NodePath<Feature>> {
-        self.move_to(path)?.try_as_concrete_type()
+        self.move_to(path)?.try_convert_to()
     }
 }
 pub trait NodePathProductNavigation: NodePathBasicNavigation
@@ -23,7 +23,7 @@ where
     Self: Sized,
 {
     fn move_to_product(self, path: &QualifiedPath) -> Option<NodePath<Product>> {
-        self.move_to(path)?.try_as_concrete_type()
+        self.move_to(path)?.try_convert_to()
     }
 }
 
@@ -38,7 +38,7 @@ pub enum ConcreteNodePathType {
 }
 
 #[derive(Clone, Debug)]
-pub struct NodePath<T: ValidNodeType> {
+pub struct NodePath<T: SymbolicNodeType> {
     path: Vec<Rc<Node>>,
     _phantom: PhantomData<T>,
 }
@@ -53,24 +53,14 @@ impl<T: CanHaveBranch> NodePath<T> {
 }
 
 impl NodePath<AnyNode> {
-    fn as_concrete_type<T: ValidNodeType>(&self) -> NodePath<T> {
-        NodePath::<T>::new(self.path.clone())
-    }
-    pub fn try_as_concrete_type<T: ValidNodeType>(&self) -> Option<NodePath<T>> {
-        if T::is_compatible(self.get_node().get_type()) {
-            Some(self.as_concrete_type())
-        } else {
-            None
-        }
-    }
-    pub fn from_concrete<T: ValidNodeType>(other: &NodePath<T>) -> Self {
+    pub fn from_concrete<T: SymbolicNodeType>(other: &NodePath<T>) -> Self {
         Self::new(other.path.clone())
     }
 }
 
 impl NodePath<VirtualRoot> {
     pub fn to_area(self, area: &QualifiedPath) -> Option<NodePath<Area>> {
-        self.move_to(area)?.try_as_concrete_type()
+        self.move_to(area)?.try_convert_to()
     }
 }
 
@@ -83,22 +73,21 @@ impl NodePath<Area> {
     }
     pub fn move_to_feature_root(self) -> Option<NodePath<FeatureRoot>> {
         self.move_to(&QualifiedPath::from(FEATURES_PREFIX))?
-            .try_as_concrete_type()
+            .try_convert_to()
     }
     pub fn move_to_product_root(self) -> Option<NodePath<ProductRoot>> {
         self.move_to(&QualifiedPath::from(PRODUCTS_PREFIX))?
-            .try_as_concrete_type()
+            .try_convert_to()
     }
 }
 
 impl NodePath<FeatureRoot> {
     pub fn iter_root_features(&self) -> impl Iterator<Item = NodePath<Feature>> {
-        self.iter_children()
-            .map(|p| p.try_as_concrete_type().unwrap())
+        self.iter_children().map(|p| p.try_convert_to().unwrap())
     }
     pub fn iter_features_req(&self) -> impl Iterator<Item = NodePath<Feature>> {
         self.iter_children_req()
-            .map(|p| p.try_as_concrete_type().unwrap())
+            .map(|p| p.try_convert_to().unwrap())
     }
 }
 
@@ -108,7 +97,7 @@ impl NodePathProductNavigation for NodePath<Product> {}
 impl NodePathFeatureNavigation for NodePath<FeatureRoot> {}
 impl NodePathFeatureNavigation for NodePath<Feature> {}
 
-impl<T: ValidNodeType> ToQualifiedPath for NodePath<T> {
+impl<T: SymbolicNodeType> ToQualifiedPath for NodePath<T> {
     fn to_qualified_path(&self) -> QualifiedPath {
         let mut path = QualifiedPath::new();
         for p in self.path.iter() {
@@ -118,7 +107,7 @@ impl<T: ValidNodeType> ToQualifiedPath for NodePath<T> {
     }
 }
 
-impl<T: ValidNodeType> NodePath<T> {
+impl<T: SymbolicNodeType> NodePath<T> {
     fn get_node(&self) -> &Node {
         self.path.last().unwrap()
     }
@@ -126,6 +115,13 @@ impl<T: ValidNodeType> NodePath<T> {
         Self {
             path,
             _phantom: PhantomData,
+        }
+    }
+    pub fn try_convert_to<To: SymbolicNodeType>(&self) -> Option<NodePath<To>> {
+        if To::is_compatible(self.get_node().get_type()) {
+            Some(NodePath::<To>::new(self.path.clone()))
+        } else {
+            None
         }
     }
     pub fn iter_children(&self) -> impl Iterator<Item = NodePath<AnyNode>> {
@@ -155,6 +151,9 @@ impl<T: ValidNodeType> NodePath<T> {
     pub fn get_metadata(&self) -> &NodeMetadata {
         self.get_node().get_metadata()
     }
+    pub fn get_actual_type(&self) -> &NodeType {
+        self.get_node().get_type()
+    }
     pub fn as_any_type(&self) -> NodePath<AnyNode> {
         NodePath::<AnyNode>::from_concrete(self)
     }
@@ -163,7 +162,7 @@ impl<T: ValidNodeType> NodePath<T> {
     }
 }
 
-impl<T: ValidNodeType> NodePathBasicNavigation for NodePath<T> {
+impl<T: SymbolicNodeType> NodePathBasicNavigation for NodePath<T> {
     fn move_to(mut self, path: &QualifiedPath) -> Option<NodePath<AnyNode>> {
         for p in path.iter_string() {
             self.path.push(self.get_node().get_child(p)?.clone());
@@ -186,17 +185,18 @@ impl<T: ValidNodeType> NodePathBasicNavigation for NodePath<T> {
 }
 
 impl<A, B> PartialEq<NodePath<A>> for NodePath<B>
-where A: ValidNodeType,
-B: ValidNodeType,
+where
+    A: SymbolicNodeType,
+    B: SymbolicNodeType,
 {
     fn eq(&self, other: &NodePath<A>) -> bool {
         self.to_qualified_path() == other.to_qualified_path()
     }
 }
 
-impl<T: ValidNodeType> Eq for NodePath<T> {}
+impl<T: SymbolicNodeType> Eq for NodePath<T> {}
 
-impl<T: ValidNodeType> Display for NodePath<T> {
+impl<T: SymbolicNodeType> Display for NodePath<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.to_qualified_path().to_string().as_str())
     }

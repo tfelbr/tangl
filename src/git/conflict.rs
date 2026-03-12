@@ -192,9 +192,10 @@ impl<'a> ConflictChecker<'a> {
         paths: &Vec<NodePath<BranchAble>>,
         k: usize,
     ) -> impl Iterator<Item = ConflictStatistic> {
-        let iterator = paths.iter().permutations(k).map(|perm| {
-            self.check_chain_and_build_statistic(&perm)
-        });
+        let iterator = paths
+            .iter()
+            .permutations(k)
+            .map(|perm| self.check_chain_and_build_statistic(&perm));
         iterator
     }
 
@@ -228,22 +229,24 @@ impl<'a> ConflictChecker<'a> {
         let iterator = n
             .iter()
             .map(|path| {
-               against
+                against
                     .iter()
                     .combinations(*k)
                     .map(|mut combination| {
                         combination.push(path);
                         combination
                             .iter()
-                            .permutations(*k+1)
+                            .permutations(*k + 1)
                             .map(|permutations| {
                                 let dereferenced = permutations
                                     .iter()
                                     .map(|permutation| **permutation)
                                     .collect::<Vec<_>>();
                                 self.check_chain_and_build_statistic(&dereferenced)
-                            }).collect::<Vec<_>>()
-                    }).flatten()
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .flatten()
             })
             .flatten();
         iterator
@@ -304,7 +307,10 @@ impl<'a> ConflictChecker<'a> {
         }
     }
 
-    fn check_chain_and_build_statistic(&self, chain: &Vec<&NodePath<BranchAble>>) -> ConflictStatistic {
+    fn check_chain_and_build_statistic(
+        &self,
+        chain: &Vec<&NodePath<BranchAble>>,
+    ) -> ConflictStatistic {
         let result = self.check_chain(chain);
         self.build_statistic(chain, result)
     }
@@ -466,10 +472,7 @@ impl<'a> ConflictAnalyzer<'a> {
 
         let mut conflicting_with_base: Vec<QualifiedPath> = vec![];
         self.context.debug("Checking against base pairwise");
-        for s in self
-            .checker
-            .check_permutations_against_base(paths, base, 1)
-        {
+        for s in self.checker.check_permutations_against_base(paths, base, 1) {
             self.context.debug(s.display_as_path());
             match s {
                 ConflictStatistic::Conflict(merge) => {
@@ -491,9 +494,9 @@ impl<'a> ConflictAnalyzer<'a> {
             .collect();
 
         self.context.debug("Checking successful against base");
-        for with_base in
-            self.checker
-                .check_permutations_against_base(&to_test_with_base, &base, 2)
+        for with_base in self
+            .checker
+            .check_permutations_against_base(&to_test_with_base, &base, 2)
         {
             self.context.debug(with_base.display_as_path());
             let altered: ConflictStatistic = match with_base {
