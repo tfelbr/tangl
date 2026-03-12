@@ -2,9 +2,10 @@ use clap::{Arg, ArgAction};
 use colored::Colorize;
 
 pub const VERBOSE: &str = "verbose";
+pub const SHOW_TAGS: &str = "show_tags";
 
 pub fn show_tags() -> Arg {
-    Arg::new("show_tags")
+    Arg::new(SHOW_TAGS)
         .long("show-tags")
         .action(ArgAction::SetTrue)
         .help("Also show tags")

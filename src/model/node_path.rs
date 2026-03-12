@@ -1,4 +1,5 @@
 use crate::model::*;
+use std::cmp::Ordering;
 use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomData;
 use std::rc::Rc;
@@ -124,6 +125,9 @@ impl<T: SymbolicNodeType> NodePath<T> {
             None
         }
     }
+    pub fn has_children(&self) -> bool {
+        self.get_node().has_children()
+    }
     pub fn iter_children(&self) -> impl Iterator<Item = NodePath<AnyNode>> {
         self.get_node().iter_children().map(|(name, _)| {
             self.clone()
@@ -199,5 +203,25 @@ impl<T: SymbolicNodeType> Eq for NodePath<T> {}
 impl<T: SymbolicNodeType> Display for NodePath<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.to_qualified_path().to_string().as_str())
+    }
+}
+
+impl<T: SymbolicNodeType> PartialOrd for NodePath<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        if self.to_qualified_path() == other.to_qualified_path() {
+            Some(Ordering::Equal)
+        } else if self.to_qualified_path() > other.to_qualified_path() {
+            Some(Ordering::Greater)
+        } else if self.to_qualified_path() < other.to_qualified_path() {
+            Some(Ordering::Less)
+        } else {
+            None
+        }
+    }
+}
+
+impl<T: SymbolicNodeType> Ord for NodePath<T> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(&other).unwrap()
     }
 }

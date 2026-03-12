@@ -23,7 +23,7 @@ impl CommandDefinition for TangleCommand {
     fn get_subcommands(&self) -> Vec<Box<dyn CommandImpl>> {
         vec![
             Box::new(StatusCommand),
-            Box::new(TreeCommand),
+            Box::new(LSCommand),
             Box::new(DeriveCommand),
             Box::new(CheckCommand),
             Box::new(CheckoutCommand),

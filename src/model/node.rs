@@ -109,6 +109,9 @@ impl Node {
     pub fn get_child<S: Into<String>>(&self, name: S) -> Option<&Rc<Node>> {
         Some(self.children.get(&name.into())?)
     }
+    pub fn has_children(&self) -> bool {
+        !self.children.is_empty()
+    }
     pub fn iter_children(&self) -> impl Iterator<Item = (&String, &Rc<Node>)> {
         self.children.iter()
     }

@@ -3,8 +3,8 @@ use crate::cli::*;
 use crate::model::{BranchAble, NodeError, QualifiedPath, ToQualifiedPath};
 use crate::util::u8_to_string;
 use clap::{Arg, Command};
-use std::error::Error;
 use colored::Colorize;
+use std::error::Error;
 
 #[derive(Clone, Debug)]
 pub struct CheckoutCommand;
@@ -29,22 +29,20 @@ impl CommandInterface for CheckoutCommand {
             .assert_path::<BranchAble>(&full_target)
         {
             Ok(node_path) => node_path,
-            Err(error) => return match error {
-                NodeError::NodeNotFound(_) => {
-                    Err(format!(
+            Err(error) => {
+                return match error {
+                    NodeError::NodeNotFound(_) => Err(format!(
                         "Cannot checkout {}: path does not exist",
                         full_target.to_string()
                     )
-                        .into())
-                }
-                NodeError::WrongNodeType(_) => {
-                    Err(format!(
+                    .into()),
+                    NodeError::WrongNodeType(_) => Err(format!(
                         "Cannot checkout {}: target does not support branches",
                         full_target
                     )
-                        .into())
-                }
-            },
+                    .into()),
+                };
+            }
         };
         let current = context.git.get_current_qualified_path()?;
         let out = context.git.checkout(&node_path)?;

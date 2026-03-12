@@ -220,6 +220,12 @@ pub trait ToQualifiedPath {
     fn to_qualified_path(&self) -> QualifiedPath;
 }
 
+impl ToQualifiedPath for String {
+    fn to_qualified_path(&self) -> QualifiedPath {
+        QualifiedPath::from(self.clone())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

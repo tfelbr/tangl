@@ -186,10 +186,10 @@ impl NodeType {
     pub fn format_node_display(&self, name: ColoredString) -> ColoredString {
         match self {
             Self::Area => name.yellow().bold(),
-            Self::FeatureRoot => name.bright_purple().bold().underline(),
-            Self::Feature => name.bright_purple(),
-            Self::ProductRoot => name.red().bold().italic(),
-            Self::Product => name.red(),
+            Self::FeatureRoot => name.bright_purple().bold().italic(),
+            Self::Feature => name.purple(),
+            Self::ProductRoot => name.truecolor(231, 100, 18).bold().italic(),
+            Self::Product => name.truecolor(231, 100, 18),
             Self::Tag => name.green(),
             _ => name,
         }
