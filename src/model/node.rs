@@ -44,6 +44,9 @@ impl Node {
     pub fn update_metadata(&mut self, metadata: NodeMetadata) {
         self.metadata = metadata;
     }
+    pub fn update_type(&mut self, node_type: NodeType) {
+        self.node_type = node_type;
+    }
     fn build_display_tree(&self, show_tags: bool) -> Tree<String> {
         let mut formatted = ColoredString::from(self.name.clone());
         if self.metadata.has_branch {
@@ -67,6 +70,20 @@ impl Node {
         }
         tree
     }
+    fn decide_child_type<S: Into<String>>(
+        &self,
+        name: S,
+        metadata: &NodeMetadata,
+        is_tag: bool,
+    ) -> Result<NodeType, WrongNodeTypeError> {
+        let real_name = name.into();
+        let new_type = if is_tag {
+            NodeType::Tag
+        } else {
+            self.node_type.decide_next_type(real_name.as_str(), metadata)?
+        };
+        Ok(new_type)
+    }
     fn add_child<S: Into<String>>(
         &mut self,
         name: S,
@@ -74,15 +91,24 @@ impl Node {
         is_tag: bool,
     ) -> Result<(), WrongNodeTypeError> {
         let real_name = name.into();
-        let new_type = if is_tag {
-            NodeType::Tag
-        } else {
-            self.node_type.decide_next_type(real_name.as_str(), &metadata)?
-        };
+        let new_type = self.decide_child_type(real_name.clone(), &metadata, is_tag)?;
         self.children.insert(
             real_name.clone(),
             Rc::new(Node::new(real_name, new_type, metadata)),
         );
+        Ok(())
+    }
+    fn update_child<S: Into<String>>(
+        &mut self,
+        name: S,
+        metadata: NodeMetadata,
+        is_tag: bool,
+    ) -> Result<(), WrongNodeTypeError> {
+        let real_name = name.into();
+        let new_type = self.decide_child_type(real_name.clone(), &metadata, is_tag)?;
+        let child = self.get_child_mut(real_name).unwrap();
+        child.update_metadata(metadata);
+        child.update_type(new_type);
         Ok(())
     }
     fn get_child_mut<S: Into<String>>(&mut self, name: S) -> Option<&mut Node> {
@@ -126,7 +152,9 @@ impl Node {
             0 => Ok(()),
             1 => {
                 match self.get_child_mut(&name) {
-                    Some(node) => node.update_metadata(metadata),
+                    Some(_) => {
+                        self.update_child(name, metadata, is_tag)?;
+                    },
                     None => {
                         self.add_child(name.clone(), metadata, is_tag)?;
                     }

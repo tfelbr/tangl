@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomData;
 use std::rc::Rc;
+use itertools::Itertools;
 
 #[derive(Clone, Debug)]
 pub struct NodePath<T: SymbolicNodeType> {
@@ -52,10 +53,10 @@ impl NodePath<ConcreteArea> {
 }
 
 impl NodePath<FeatureRoot> {
-    pub fn iter_root_features(&self) -> impl Iterator<Item = NodePath<ConcreteFeature>> {
+    pub fn iter_root_features(&self) -> impl Iterator<Item = NodePath<Feature>> {
         self.iter_children().map(|p| p.try_convert_to().unwrap())
     }
-    pub fn iter_features_req(&self) -> impl Iterator<Item = NodePath<ConcreteFeature>> {
+    pub fn iter_features_req(&self) -> impl Iterator<Item = NodePath<Feature>> {
         self.iter_children_req()
             .map(|p| p.try_convert_to().unwrap())
     }
@@ -113,9 +114,9 @@ impl<T: SymbolicNodeType> NodePath<T> {
     pub fn iter_children(&self) -> impl Iterator<Item = NodePath<AnyNode>> {
         self.get_node().iter_children().map(|(name, _)| {
             self.clone()
-                .move_to(&QualifiedPath::from(name.clone()))
+                .move_to(&name.to_qualified_path())
                 .unwrap()
-        })
+        }).sorted()
     }
     pub fn iter_children_req(&self) -> impl Iterator<Item = NodePath<AnyNode>> {
         self.iter_children().flat_map(|path| {

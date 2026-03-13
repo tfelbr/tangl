@@ -205,7 +205,7 @@ impl GitInterface {
     pub fn get_commit_history<T: HasBranch>(
         &self,
         branch: &NodePath<T>,
-    ) -> Result<Vec<BaseCommit>, GitError> {
+    ) -> Result<Vec<Commit>, GitError> {
         let raw_hashes = u8_to_string(
             &self
                 .raw_git_interface
@@ -215,7 +215,7 @@ impl GitInterface {
         .trim()
         .to_string();
         let all_hashes = raw_hashes.split("\n").collect::<Vec<&str>>();
-        let commits: Vec<BaseCommit> = all_hashes
+        let commits: Vec<Commit> = all_hashes
             .into_iter()
             .map(|hash| {
                 let trimmed = hash.trim();
@@ -228,7 +228,7 @@ impl GitInterface {
                 )
                 .trim()
                 .to_string();
-                BaseCommit::new(trimmed, commit_message)
+                Commit::new(trimmed, commit_message)
             })
             .collect();
         Ok(commits)
@@ -239,7 +239,7 @@ impl GitInterface {
     ) -> Result<Vec<DerivationCommit>, GitError> {
         let mut derivation_commits: Vec<DerivationCommit> = vec![];
         for commit in self.get_commit_history(path)? {
-            match DerivationCommit::from_base_commit(commit) {
+            match DerivationCommit::from_commit(commit) {
                 Some(c) => match c {
                     Ok(c) => derivation_commits.push(c),
                     Err(e) => return Err(e.into()),
@@ -249,15 +249,15 @@ impl GitInterface {
         }
         Ok(derivation_commits)
     }
-    pub fn get_files_managed_by_branch(
+    pub fn get_files_managed_by_branch<T: HasBranch>(
         &self,
-        branch: &QualifiedPath,
+        branch: &NodePath<T>,
     ) -> Result<Vec<String>, GitError> {
         let out = self.raw_git_interface.run(vec![
             "ls-tree",
             "-r",
             "--name-only",
-            branch.to_git_branch().as_str(),
+            branch.to_qualified_path().to_git_branch().as_str(),
         ])?;
         Ok(u8_to_string(&out.stdout)
             .split("\n")

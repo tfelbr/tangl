@@ -234,7 +234,7 @@ pub enum NodeType {
 }
 
 impl NodeType {
-    pub fn decide_next_type(&mut self, name: &str, metadata: &NodeMetadata) -> Result<NodeType, WrongNodeTypeError> {
+    pub fn decide_next_type(&self, name: &str, metadata: &NodeMetadata) -> Result<NodeType, WrongNodeTypeError> {
         match self {
             Self::ConcreteFeature |
             Self::AbstractFeature |

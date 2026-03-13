@@ -1,18 +1,18 @@
 use crate::model::DerivationMetadata;
 use serde::Deserialize;
 
-pub trait Commit {
+pub trait GitCommit {
     fn get_hash(&self) -> &String;
     fn get_message(&self) -> &String;
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct BaseCommit {
+pub struct Commit {
     hash: String,
     message: String,
 }
 
-impl PartialEq for BaseCommit {
+impl PartialEq for Commit {
     fn eq(&self, other: &Self) -> bool {
         other.hash == self.hash
     }
@@ -22,7 +22,7 @@ impl PartialEq for BaseCommit {
     }
 }
 
-impl Commit for BaseCommit {
+impl GitCommit for Commit {
     fn get_hash(&self) -> &String {
         &self.hash
     }
@@ -31,7 +31,7 @@ impl Commit for BaseCommit {
     }
 }
 
-impl BaseCommit {
+impl Commit {
     pub fn new<S1: Into<String>, S2: Into<String>>(hash: S1, message: S2) -> Self {
         Self {
             hash: hash.into(),
@@ -43,11 +43,11 @@ impl BaseCommit {
 const DERIVATION_COMMENT: &str = "# DO NOT EDIT OR REMOVE THIS COMMIT\nDERIVATION STATUS\n";
 
 pub struct DerivationCommit {
-    base_commit: BaseCommit,
+    base_commit: Commit,
     metadata: DerivationMetadata,
 }
 
-impl Commit for DerivationCommit {
+impl GitCommit for DerivationCommit {
     fn get_hash(&self) -> &String {
         self.base_commit.get_hash()
     }
@@ -58,7 +58,7 @@ impl Commit for DerivationCommit {
 }
 
 impl DerivationCommit {
-    pub fn from_base_commit(base_commit: BaseCommit) -> Option<serde_json::error::Result<Self>> {
+    pub fn from_commit(base_commit: Commit) -> Option<serde_json::error::Result<Self>> {
         if !base_commit.get_message().contains(DERIVATION_COMMENT) {
             return None;
         }

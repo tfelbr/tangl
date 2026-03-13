@@ -1,21 +1,64 @@
 use crate::cli::*;
-use crate::model::QualifiedPath;
+use crate::model::*;
 use clap::{Arg, Command};
 use std::error::Error;
+use colored::Colorize;
+use crate::git::interface::GitInterface;
 
-fn extract_feature_names(message: &str) -> Vec<QualifiedPath> {
-    let to_filter = vec!["# DO NOT EDIT OR REMOVE THIS COMMIT", "DERIVATION FINISHED"];
-    let trimmed = message.trim();
-    trimmed
-        .split("\n")
-        .filter_map(|e| {
-            if !to_filter.contains(&e) {
-                Some(QualifiedPath::from(e))
-            } else {
-                None
+const COMMIT: &str = "commit";
+const FEATURE: &str = "feature";
+
+fn assert_target_commit_between_derivations(
+    target_hash: &String, 
+    commits: &Vec<Commit>
+) -> Result<DerivationCommit, Box<dyn Error>> {
+    let mut commit_found = false;
+    let mut derivation_commit: Option<DerivationCommit> = None;
+    for commit in commits {
+        if commit.get_hash() == target_hash {
+            if DerivationCommit::from_commit(commit.clone()).is_some() {
+                return Err("Cannot untie: target is a derivation commit".into())
             }
+            commit_found = true;
+        }
+        if commit_found {
+            if let Some(result) = DerivationCommit::from_commit(commit.clone()) {
+                match result {
+                    Ok(dc) => {
+                        match dc.get_metadata().get_state() {
+                            DerivationState::Finished => { 
+                                derivation_commit = Some(dc);
+                                break;
+                            },
+                            _ => return Err("Cannot untie: target happened while deriving".into())
+                        }
+                    }
+                    Err(e) => { return Err(e.into()); }
+                }
+            }
+        }
+    };
+    Ok(derivation_commit.unwrap())
+}
+
+fn find_features_that_contain_files<'a>(
+    commit: &'a String, 
+    features: &'a Vec<NodePath<ConcreteFeature>>,
+    git_interface: &GitInterface,
+) -> Result<Vec<&'a NodePath<ConcreteFeature>>, Box<dyn Error>> {
+    let files_of_commit = git_interface.get_files_changed_by_commit(commit)?;
+    let all = features
+        .iter()
+        .filter(|feature| {
+            let files_of_feature = git_interface.get_files_managed_by_branch(feature).unwrap();
+            let mut found_all = true;
+            for file in files_of_commit.iter() {
+                if !files_of_feature.contains(file) { found_all = false }
+            };
+            found_all
         })
-        .collect()
+        .collect();
+    Ok(all)
 }
 
 #[derive(Clone, Debug)]
@@ -27,96 +70,66 @@ impl CommandDefinition for UntieCommand {
             .about("Untie commit from product and merge back into feature")
             .disable_help_subcommand(true)
             .arg(
-                Arg::new("commit")
-                    .short('c')
-                    .long("commit")
+                Arg::new(COMMIT)
+                    .default_value("HEAD")
                     .help("Specific commit to untie"),
             )
             .arg(
-                Arg::new("feature")
-                    .short('f')
-                    .long("feature")
+                Arg::new(FEATURE)
                     .help("Feature to untie to"),
             )
     }
 }
 
 impl CommandInterface for UntieCommand {
-    fn run_command(&self, _context: &mut CommandContext) -> Result<(), Box<dyn Error>> {
-        // let current = match context.git.get_current_node_path()?.concretize() {
-        //     ConcreteNodePathType::Product(path) => path,
-        //     _ => {
-        //         return Err("Not on product branch".into());
-        //     }
-        // };
-        // let maybe_commit = context.arg_helper.get_argument_value::<String>("commit");
-        // let maybe_feature = context.arg_helper.get_argument_value::<String>("feature");
-        // let mut commit_history = context
-        //     .git
-        //     .get_commit_history(&current.to_qualified_path())?;
-        // if commit_history.is_empty() {
-        //     context.info("No commits on product");
-        //     return Ok(());
-        // }
-        // let hash: String = match maybe_commit {
-        //     Some(commit) => commit,
-        //     None => commit_history.get(0).unwrap().get_hash().clone(),
-        // };
-        // let mut has_valid = false;
-        // let mut derivation_found = false;
-        // let mut features: Vec<QualifiedPath> = Vec::new();
-        // commit_history.reverse();
-        // for commit in commit_history.iter() {
-        //     if commit.get_message().contains("DERIVATION FINISHED") {
-        //         if commit.get_hash() == &hash {
-        //             return Err("Derivation commit cannot be untied".into());
-        //         }
-        //         derivation_found = true;
-        //         features.extend(extract_feature_names(&commit.get_message()));
-        //     } else {
-        //         if derivation_found && commit.get_hash() == &hash {
-        //             has_valid = true;
-        //             break;
-        //         }
-        //     }
-        // }
-        // if !has_valid {
-        //     return Err("Commit not found after initial derivation".into());
-        // }
-        // let files_of_commit = context.git.get_files_changed_by_commit(&hash)?;
-        // let filtered = features
-        //     .into_iter()
-        //     .filter(|feature| {
-        //         let managed_files = context.git.get_files_managed_by_branch(feature).unwrap();
-        //         let mut all_true = true;
-        //         for file_in_commit in files_of_commit.iter() {
-        //             if !managed_files.contains(file_in_commit) {
-        //                 all_true = false;
-        //             }
-        //         }
-        //         all_true
-        //     })
-        //     .collect::<Vec<QualifiedPath>>();
-        // let feature: QualifiedPath = match maybe_feature {
-        //     Some(feature) => QualifiedPath::from(feature),
-        //     None => {
-        //         match filtered.len() {
-        //             0 => { return Err("There are no features matching all changed files. Please choose one manually with the --feature parameter.".into()) }
-        //             1 => { QualifiedPath::from(filtered[0].clone()) },
-        //             _ => { return Err("There are multiple potential untie targets. Please choose one manually with the --feature parameter.".into() ) }
-        //         }
-        //     },
-        // };
-        // let current_path = context.git.get_current_qualified_path()?;
-        // context.git.checkout(&feature)?;
-        // let output = context.git.cherry_pick(&hash)?;
-        // if !output.status.success() {
-        //     context.git.abort_merge()?;
-        //     context.info(format!("Unable to untie commit {}", &hash));
-        // } else {
-        //     context.info(format!("Untied commit {} to {}", &hash, &feature));
-        // }
-        // context.git.checkout(&current_path)?;
+    fn run_command(&self, context: &mut CommandContext) -> Result<(), Box<dyn Error>> {
+        let product = if let Some(path) = context
+            .git
+            .get_current_node_path()?
+            .try_convert_to::<ConcreteProduct>() {
+            path
+        } else { return Err("Not on product branch".into()) };
+        let target_commit = context.arg_helper.get_argument_value::<String>(COMMIT).unwrap();
+        let maybe_feature = context.arg_helper.get_argument_value::<String>(FEATURE);
+        
+        let commits = context.git.get_commit_history(&product)?;
+        if commits.is_empty() {
+            context.info("No commits on product");
+            return Ok(());
+        }
+        let target_commit_hash: String = match target_commit.as_str() {
+            "HEAD" => commits.get(0).unwrap().get_hash().clone(),
+            _ => target_commit,
+        };
+        let finished_derivation = assert_target_commit_between_derivations(&target_commit_hash, &commits)?;
+        let raw_features = finished_derivation
+            .get_metadata()
+            .get_total()
+            .iter()
+            .map(|p| p.get_qualified_path())
+            .collect();
+        let features = context.git.get_model().assert_all::<ConcreteFeature>(&raw_features)?;
+        let found = find_features_that_contain_files(&target_commit_hash, &features, &context.git)?;
+        let feature: NodePath<ConcreteFeature> = match maybe_feature {
+            Some(feature) => context.git.get_model().assert_path(&feature.to_qualified_path())?,
+            None => {
+                match found.len() {
+                    0 => { return Err("There are no features matching all changed files. Please choose one manually.".into()) }
+                    1 => { features.get(0).unwrap().clone() },
+                    _ => { return Err("There are multiple potential untie targets. Please choose one manually.".into() ) }
+                }
+            },
+        };
+        let current_path = context.git.get_current_node_path()?;
+        context.git.checkout(&feature)?;
+        let output = context.git.cherry_pick(&target_commit_hash)?;
+        if !output.status.success() {
+            context.git.abort_merge()?;
+            context.info(format!("Unable to untie commit {}", &target_commit_hash));
+        } else {
+            context.info(format!("Untied commit {} to {}", target_commit_hash.blue(), feature.to_qualified_path().to_string().blue()));
+        }
+        context.git.checkout(&current_path)?;
         Ok(())
     }
 }
