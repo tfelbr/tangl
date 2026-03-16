@@ -226,7 +226,7 @@ impl CommandInterface for CheckCommand {
         for error in statistics.iter_errors() {
             context.error(error.display_as_path())
         }
-        if statistics.n_conflict() == 0 {
+        if statistics.n_conflicts() == 0 {
             context.info("No conflicts".green().to_string());
         }
         Ok(())

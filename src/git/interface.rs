@@ -287,6 +287,9 @@ impl GitInterface {
             .raw_git_interface
             .run(vec!["commit", "--allow-empty", "-m", message])?)
     }
+    pub fn interactive_commit(&self) -> Result<Output, GitError> {
+        Ok(self.raw_git_interface.run(vec!["commit"])?)
+    }
     pub fn cherry_pick(&self, commit: &str) -> Result<Output, GitError> {
         Ok(self.raw_git_interface.run(vec!["cherry-pick", commit])?)
     }

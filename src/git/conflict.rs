@@ -1,7 +1,7 @@
 use crate::cli::CommandContext;
 use crate::git::error::GitError;
 use crate::git::interface::GitInterface;
-use crate::model::{ConcreteBranch, NodePath, QualifiedPath, ToQualifiedPath};
+use crate::model::{ConcreteBranch, GitCommit, NodePath, QualifiedPath, ToQualifiedPath};
 use colored::Colorize;
 use itertools::Itertools;
 use std::collections::HashMap;
@@ -159,7 +159,7 @@ impl ConflictStatistics {
     pub fn n_ok(&self) -> usize {
         self.ok.len()
     }
-    pub fn n_conflict(&self) -> usize {
+    pub fn n_conflicts(&self) -> usize {
         self.conflict.len()
     }
     pub fn n_errors(&self) -> usize {

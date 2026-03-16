@@ -33,6 +33,7 @@ impl CommandDefinition for TangleCommand {
             Box::new(TagCommand),
             Box::new(SpreadCommand),
             Box::new(UntieCommand),
+            Box::new(CommitCommand),
             Box::new(HiddenCompletionCommand),
         ]
     }

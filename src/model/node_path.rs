@@ -16,11 +16,25 @@ impl<T: HasFeatureChildren> NodePath<T> {
     pub fn move_to_feature(self, path: &QualifiedPath) -> Option<NodePath<Feature>> {
         self.move_to(path)?.try_convert_to()
     }
+    pub fn iter_features(&self) -> impl Iterator<Item = NodePath<Feature>> {
+        self.iter_children().map(|p| p.try_convert_to().unwrap())
+    }
+    pub fn iter_features_req(&self) -> impl Iterator<Item = NodePath<Feature>> {
+        self.iter_children_req()
+            .map(|p| p.try_convert_to().unwrap())
+    }
 }
 
 impl<T: HasProductChildren> NodePath<T> {
     pub fn move_to_product(self, path: &QualifiedPath) -> Option<NodePath<Product>> {
         self.move_to(path)?.try_convert_to()
+    }
+    pub fn iter_products(&self) -> impl Iterator<Item = NodePath<Product>> {
+        self.iter_children().map(|p| p.try_convert_to().unwrap())
+    }
+    pub fn iter_products_req(&self) -> impl Iterator<Item = NodePath<Product>> {
+        self.iter_children_req()
+            .map(|p| p.try_convert_to().unwrap())
     }
 }
 
@@ -58,16 +72,6 @@ impl NodePath<ConcreteArea> {
             self.move_to(&QualifiedPath::from(PRODUCTS_PREFIX))?
                 .try_convert_to()
         }
-    }
-}
-
-impl NodePath<FeatureRoot> {
-    pub fn iter_root_features(&self) -> impl Iterator<Item = NodePath<Feature>> {
-        self.iter_children().map(|p| p.try_convert_to().unwrap())
-    }
-    pub fn iter_features_req(&self) -> impl Iterator<Item = NodePath<Feature>> {
-        self.iter_children_req()
-            .map(|p| p.try_convert_to().unwrap())
     }
 }
 
