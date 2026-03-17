@@ -33,7 +33,7 @@ fn print_product_tree(context: &mut CommandContext) -> Result<(), Box<dyn Error>
     let area = context.git.get_current_area()?;
     match area.move_to_product_root() {
         Some(path) => {
-            context.info(path.display_tree(false));
+            context.info(path.display_tree(false).trim());
         }
         None => {}
     }
@@ -60,24 +60,19 @@ impl CommandInterface for ProductCommand {
     fn run_command(&self, context: &mut CommandContext) -> Result<(), Box<dyn Error>> {
         let maybe_delete = context.arg_helper.get_argument_value::<String>("delete");
         let maybe_product = context.arg_helper.get_argument_value::<String>(PRODUCT);
-        if maybe_product.is_some() {
+        if let Some(delete) = maybe_delete {
+            let to_delete = if let Some(current) = context.git.get_current_node_path::<ConcreteProduct>()? {
+                current.to_qualified_path() + delete.to_qualified_path()
+            } else {
+                context.git.get_current_area()?.get_path_to_product_root() + delete.to_qualified_path()
+            };
+            delete_path::<ConcreteProduct>(&to_delete, context)?;
+        } else if maybe_product.is_some() {
             add_product(maybe_product.unwrap().to_qualified_path(), context)?;
+        } else {
+            print_product_tree(context)?;
         }
-        match maybe_delete {
-            Some(delete) => {
-                let to_delete = if let Some(current) = context.git.get_current_node_path::<ConcreteProduct>()? {
-                    current.to_qualified_path() + delete.to_qualified_path()
-                } else {
-                    context.git.get_current_area()?.get_path_to_product_root() + delete.to_qualified_path()
-                };
-                delete_path::<ConcreteProduct>(&to_delete, context)?;
-                Ok(())
-            }
-            None => {
-                print_product_tree(context)?;
-                Ok(())
-            }
-        }
+        Ok(())
     }
     fn shell_complete(
         &self,

@@ -30,7 +30,7 @@ fn print_feature_tree(context: &mut CommandContext, show_tags: bool) -> Result<(
     let area = context.git.get_current_area()?;
     match area.move_to_feature_root() {
         Some(path) => {
-            context.info(path.display_tree(show_tags));
+            context.info(path.display_tree(show_tags).trim());
         }
         None => {}
     }
