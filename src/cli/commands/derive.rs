@@ -314,7 +314,7 @@ impl CommandDefinition for DeriveCommand {
 impl CommandInterface for DeriveCommand {
     fn run_command(&self, context: &mut CommandContext) -> Result<(), Box<dyn Error>> {
         let current_area = context.git.get_current_area()?;
-        let current_path = context.git.get_current_node_path::<AnyHasBranch>()?.unwrap();
+        let current_path = context.git.assert_current_node_path::<AnyHasBranch>()?;
         let product_path = match current_path
             .try_convert_to::<ConcreteProduct>()
         {

@@ -263,7 +263,7 @@ impl<'a> ConflictChecker<'a> {
         }
         let mut failed_at: Option<usize> = None;
         let mut tested: Vec<usize> = vec![];
-        let current_path = self.interface.get_current_node_path::<AnyHasBranch>()?.unwrap();
+        let current_path = self.interface.assert_current_node_path::<AnyHasBranch>()?;
         let base = chain[0];
         self.interface.checkout(base)?;
         let temporary = QualifiedPath::from("tmp");

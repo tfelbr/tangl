@@ -6,7 +6,7 @@ use colored::Colorize;
 use std::error::Error;
 
 fn add_feature(feature: QualifiedPath, context: &mut CommandContext) -> Result<(), Box<dyn Error>> {
-    let node_path = context.git.get_current_node_path::<AnyHasBranch>()?.unwrap();
+    let node_path = context.git.assert_current_node_path::<AnyHasBranch>()?;
     let current_path = if let Some(path) = node_path.try_convert_to::<ConcreteFeature>() {
         path.to_qualified_path()
     } else if let Some(path) = node_path.as_any_type().try_convert_to::<ConcreteArea>() {
@@ -59,8 +59,9 @@ impl CommandInterface for FeatureCommand {
             .unwrap();
         match maybe_delete {
             Some(delete) => {
-                let to_delete = if let Some(current) = context.git.get_current_node_path::<ConcreteFeature>()? {
-                    current.to_qualified_path() + delete.to_qualified_path()
+                let current = context.git.assert_current_node_path::<AnyHasBranch>()?;
+                let to_delete = if let Some(feature) = current.try_convert_to::<ConcreteFeature>() {
+                    feature.to_qualified_path() + delete.to_qualified_path()
                 } else {
                     context.git.get_current_area()?.get_path_to_feature_root() + delete.to_qualified_path()
                 };
@@ -90,7 +91,7 @@ impl CommandInterface for FeatureCommand {
         let result = match completion_helper.currently_editing() {
             Some(arg) => match arg.get_id().as_str() {
                 "delete" => {
-                    let current = context.git.get_current_node_path::<AnyHasBranch>()?.unwrap();
+                    let current = context.git.assert_current_node_path::<AnyHasBranch>()?;
                     let reference = if let Some(feature) = current.try_convert_to::<ConcreteFeature>() {
                         feature.to_qualified_path()
                     } else {

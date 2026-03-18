@@ -8,7 +8,7 @@ const PRODUCT: &str = "product";
 
 
 fn add_product(product: QualifiedPath, context: &mut CommandContext) -> Result<(), Box<dyn Error>> {
-    let node_path = context.git.get_current_node_path::<AnyHasBranch>()?.unwrap();
+    let node_path = context.git.assert_current_node_path::<AnyHasBranch>()?;
     let current_path = if let Some(path) = node_path.try_convert_to::<ConcreteProduct>() {
         path.to_qualified_path()
     } else if let Some(path) = node_path.as_any_type().try_convert_to::<ConcreteArea>() {
@@ -61,8 +61,9 @@ impl CommandInterface for ProductCommand {
         let maybe_delete = context.arg_helper.get_argument_value::<String>("delete");
         let maybe_product = context.arg_helper.get_argument_value::<String>(PRODUCT);
         if let Some(delete) = maybe_delete {
-            let to_delete = if let Some(current) = context.git.get_current_node_path::<ConcreteProduct>()? {
-                current.to_qualified_path() + delete.to_qualified_path()
+            let current = context.git.assert_current_node_path::<AnyHasBranch>()?;
+            let to_delete = if let Some(product) = current.try_convert_to::<ConcreteProduct>() {
+                product.to_qualified_path() + delete.to_qualified_path()
             } else {
                 context.git.get_current_area()?.get_path_to_product_root() + delete.to_qualified_path()
             };

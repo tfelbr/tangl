@@ -82,14 +82,7 @@ impl CommandDefinition for UntieCommand {
 
 impl CommandInterface for UntieCommand {
     fn run_command(&self, context: &mut CommandContext) -> Result<(), Box<dyn Error>> {
-        let product = if let Some(path) = context
-            .git
-            .get_current_node_path::<ConcreteProduct>()?
-        {
-            path
-        } else {
-            return Err("Not on product branch".into());
-        };
+        let product = context.git.assert_current_node_path::<ConcreteProduct>()?;
         let target_commit = context
             .arg_helper
             .get_argument_value::<String>(COMMIT)
@@ -137,7 +130,7 @@ impl CommandInterface for UntieCommand {
                 }
             },
         };
-        let current_path = context.git.get_current_node_path::<AnyHasBranch>()?.unwrap();
+        let current_path = context.git.assert_current_node_path::<AnyHasBranch>()?;
         context.git.checkout(&feature)?;
         let output = context.git.cherry_pick(&target_commit_hash)?;
         if !output.status.success() {

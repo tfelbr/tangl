@@ -138,7 +138,7 @@ impl CommandInterface for CheckCommand {
             && !by_order
             && !one_to_n
         {
-            let current_path = context.git.get_current_node_path()?.unwrap();
+            let current_path = context.git.assert_current_node_path()?;
             if current_path.try_convert_to::<ConcreteFeature>().is_some() {
                 let feature_root = context
                     .git

@@ -26,7 +26,7 @@ impl CommandInterface for StatusCommand {
             .join("\n")
             .trim()
             .to_string();
-        let current_path = context.git.get_current_node_path::<AnyHasBranch>()?.unwrap();
+        let current_path = context.git.assert_current_node_path::<AnyHasBranch>()?;
         let first_line = format!(
             "On {} branch {}",
             current_path.get_actual_type().get_formatted_name(),

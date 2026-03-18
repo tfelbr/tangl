@@ -26,7 +26,7 @@ impl CommandDefinition for CommitCommand {
 impl CommandInterface for CommitCommand {
     fn run_command(&self, context: &mut CommandContext) -> Result<(), Box<dyn Error>> {
         let maybe_message = context.arg_helper.get_argument_value::<String>(MESSAGE);
-        let current = context.git.get_current_node_path::<AnyHasBranch>()?.unwrap();
+        let current = context.git.assert_current_node_path::<AnyHasBranch>()?;
         context.git.colored_output(true);
         let out = match maybe_message {
             Some(message) => context.git.commit(&message)?,

@@ -121,11 +121,21 @@ impl GitInterface {
         base.push(self.get_current_branch()?);
         Ok(base)
     }
-    pub fn get_current_node_path<T: HasBranch>(&self) -> Result<Option<NodePath<T>>, GitError> {
+    pub fn assert_current_node_path<T: HasBranch>(&self) -> Result<NodePath<T>, GitError> {
         let current_qualified_path = self.get_current_qualified_path()?;
-        Ok(self
-            .model
-            .get_node_path::<T>(&current_qualified_path))
+        match self.model.assert_path::<T>(&current_qualified_path) {
+            Ok(path) => Ok(path),
+            Err(error) => match error {
+                ModelError::WrongNodeType(_) => {
+                    let message = format!(
+                        "Current branch is not of type '{}'",
+                        T::identifier(),
+                    );
+                    Err(ModelError::WrongNodeType(WrongNodeTypeError::new(message)).into())
+                },
+                _ => unreachable!(),
+            }
+        }
     }
     pub fn get_current_area(&self) -> Result<NodePath<ConcreteArea>, GitError> {
         let current_qualified_path = self.get_current_qualified_path()?;
@@ -158,7 +168,12 @@ impl GitInterface {
     pub fn create_branch<T: SymbolicNodeType>(&mut self, path: &QualifiedPath) -> Result<NodePath<T>, GitError> {
         let node_type = self.model.insert_qualified_path(path.clone(), false);
         if !T::is_compatible(&node_type) {
-            return Err(WrongNodeTypeError::new(node_type.get_formatted_name()).into());
+            let message = format!(
+                "Expected to create branch of type '{}', but it would be of type '{}'",
+                T::identifier(),
+                node_type.get_type_name(),
+            );
+            return Err(ModelError::WrongNodeType(WrongNodeTypeError::new(message)).into());
         }
         let output = self.create_branch_no_mut(path)?;
         if output.status.success() {

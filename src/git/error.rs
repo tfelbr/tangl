@@ -1,4 +1,4 @@
-use crate::model::WrongNodeTypeError;
+use crate::model::ModelError;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::io;
@@ -25,7 +25,7 @@ impl Error for GitInterfaceError {}
 pub enum GitError {
     Io(io::Error),
     GitInterface(GitInterfaceError),
-    WrongNodeType(WrongNodeTypeError),
+    Model(ModelError),
     SerdeJson(serde_json::Error),
 }
 impl Display for GitError {
@@ -33,7 +33,7 @@ impl Display for GitError {
         match self {
             GitError::Io(err) => err.fmt(f),
             GitError::GitInterface(err) => err.fmt(f),
-            GitError::WrongNodeType(err) => err.fmt(f),
+            GitError::Model(err) => err.fmt(f),
             GitError::SerdeJson(err) => err.fmt(f),
         }
     }
@@ -49,9 +49,9 @@ impl From<GitInterfaceError> for GitError {
         GitError::GitInterface(value)
     }
 }
-impl From<WrongNodeTypeError> for GitError {
-    fn from(value: WrongNodeTypeError) -> Self {
-        GitError::WrongNodeType(value)
+impl From<ModelError> for GitError {
+    fn from(value: ModelError) -> Self {
+        GitError::Model(value)
     }
 }
 impl From<serde_json::Error> for GitError {
