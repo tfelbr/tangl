@@ -1,4 +1,4 @@
-use crate::model::{ConcreteFeature, NodePath, QualifiedPath, ToQualifiedPath};
+use crate::model::{CommitMetadata, ConcreteFeature, NodePath, QualifiedPath, ToQualifiedPath};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use uuid::Uuid;
@@ -29,16 +29,14 @@ impl FeatureMetadata {
 }
 
 pub enum DerivationState {
-    Starting,
     InProgress,
-    Finished,
+    None,
 }
 impl Display for DerivationState {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let out = match self {
-            DerivationState::Starting => "starting",
             DerivationState::InProgress => "in_progress",
-            DerivationState::Finished => "finished",
+            DerivationState::None => "none",
         };
         f.write_str(out)
     }
@@ -46,20 +44,16 @@ impl Display for DerivationState {
 impl DerivationState {
     pub fn from_string<S: Into<String>>(from: S) -> Self {
         let real = from.into();
-        if real == "starting" {
-            Self::Starting
-        } else if real == "in_progress" {
+        if real == "in_progress" {
             Self::InProgress
-        } else if real == "finished" {
-            Self::Finished
         } else {
-            unreachable!()
+            Self::None
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct DerivationMetadata {
+pub struct DerivationData {
     id: String,
     state: String,
     initial_commit: String,
@@ -67,68 +61,53 @@ pub struct DerivationMetadata {
     missing: Vec<FeatureMetadata>,
     total: Vec<FeatureMetadata>,
 }
-impl DerivationMetadata {
+impl DerivationData {
     fn new<S: Into<String>>(
-        id: S,
-        state: DerivationState,
-        initial_commit: S,
-        completed: Vec<FeatureMetadata>,
-        missing: Vec<FeatureMetadata>,
-        total: Vec<FeatureMetadata>,
-    ) -> Self {
-        Self {
-            id: id.into(),
-            initial_commit: initial_commit.into(),
-            state: state.to_string(),
-            completed,
-            missing,
-            total,
-        }
-    }
-    pub fn new_initial<S: Into<String>>(features: Vec<FeatureMetadata>, initial_commit: S) -> Self {
-        let uuid = Uuid::new_v4();
-        Self::new(
-            uuid.to_string(),
-            DerivationState::Starting,
-            initial_commit.into(),
-            Vec::new(),
-            features.clone(),
-            features,
-        )
-    }
-    pub fn new_from_previously_finished<S: Into<String>>(
-        previous: &Self,
         features: Vec<FeatureMetadata>,
-        starting_commit: S,
+        initial_commit: S,
+        previously_finished: Option<&Self>,
     ) -> Self {
-        match previous.get_state() {
-            DerivationState::Finished => {}
-            _ => panic!("Unexpected derivation state {}", previous.get_state()),
-        }
         let uuid = Uuid::new_v4();
-        let mut total = previous.get_total().clone();
-        for feature in features.clone() {
-            if !total.contains(&feature) {
-                total.push(feature);
+        if let Some(prev) = previously_finished {
+            match prev.get_state() {
+                DerivationState::InProgress => Self {
+                    id: prev.id.clone(),
+                    initial_commit: prev.initial_commit.clone(),
+                    state: prev.state.clone(),
+                    completed: prev.completed.clone(),
+                    missing: prev.missing.clone(),
+                    total: prev.total.clone(),
+                },
+                DerivationState::None => {
+                    let mut total = prev.get_total().clone();
+                    for f in prev.total.iter() {
+                        if !total.contains(f) {
+                            total.push(f.clone());
+                        }
+                    }
+                    Self {
+                        id: uuid.to_string(),
+                        initial_commit: initial_commit.into(),
+                        state: DerivationState::InProgress.to_string(),
+                        completed: vec![],
+                        missing: features.clone(),
+                        total,
+                    }
+                }
+            }
+        } else {
+            Self {
+                id: uuid.to_string(),
+                initial_commit: initial_commit.into(),
+                state: DerivationState::InProgress.to_string(),
+                completed: vec![],
+                missing: features.clone(),
+                total: features,
             }
         }
-        Self::new(
-            uuid.to_string(),
-            DerivationState::Starting,
-            starting_commit.into(),
-            Vec::new(),
-            features,
-            total,
-        )
-    }
-    pub fn from_json<S: Into<String>>(content: S) -> serde_json::error::Result<Self> {
-        serde_json::from_str::<Self>(&content.into())
-    }
-    pub fn to_json(&self) -> serde_json::error::Result<String> {
-        serde_json::to_string(&self)
     }
     pub fn as_finished(&mut self) {
-        self.state = DerivationState::Finished.to_string();
+        self.state = DerivationState::None.to_string();
     }
     pub fn as_in_progress(&mut self) {
         self.state = DerivationState::InProgress.to_string();
@@ -173,5 +152,48 @@ impl DerivationMetadata {
     }
     pub fn get_initial_commit(&self) -> &String {
         &self.initial_commit
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DerivationMetadata {
+    pointer: Option<String>,
+    data: Option<DerivationData>,
+}
+
+impl CommitMetadata for DerivationMetadata {
+    fn header() -> String {
+        "---derivation-metadata---".to_string()
+    }
+    fn from_json<S: Into<String>>(content: S) -> serde_json::error::Result<Self> {
+        serde_json::from_str::<Self>(&content.into())
+    }
+    fn to_json(&self) -> serde_json::Result<String> {
+        serde_json::to_string(&self)
+    }
+}
+
+impl DerivationMetadata {
+    pub fn new<S: Into<String>>(pointer: Option<S>, data: Option<DerivationData>) -> Self {
+        if pointer.is_none() && data.is_none() || pointer.is_some() && data.is_some() {
+            panic!("Must have a pointer XOR data")
+        }
+        if let Some(p) = pointer {
+            Self {
+                pointer: Some(p.into()),
+                data,
+            }
+        } else {
+            Self {
+                pointer: None,
+                data,
+            }
+        }
+    }
+    pub fn get_pointer(&self) -> &Option<String> {
+        &self.pointer
+    }
+    pub fn get_data(&self) -> &Option<DerivationData> {
+        &self.data
     }
 }

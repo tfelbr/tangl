@@ -37,13 +37,13 @@ fn handle_abort(
 ) -> Result<bool, Box<dyn Error>> {
     match (last_state, abort) {
         (None, true) => Err("No derivation in progress, there is nothing to abort".into()),
-        (Some(last_state), true) => match last_state.get_metadata().get_state() {
+        (Some(last_state), true) => match last_state.try_get_metadata().get_state() {
             DerivationState::Finished => {
                 Err("No derivation in progress, there is nothing to abort".into())
             }
             _ => {
                 context.info("Aborting current derivation process");
-                let commit = last_state.get_metadata().get_initial_commit();
+                let commit = last_state.try_get_metadata().get_initial_commit();
                 context.git.abort_merge()?;
                 context.git.reset_hard(commit)?;
                 context.info(format!("Reset to state before derivation ({})", commit));
@@ -62,16 +62,16 @@ fn handle_continue(
 ) -> Result<bool, Box<dyn Error>> {
     match (last_state, continue_derivation, optimize) {
         (None, true, _) => Err("No derivation in progress, there is nothing to continue".into()),
-        (Some(last_state), true, _) => match last_state.get_metadata().get_state() {
+        (Some(last_state), true, _) => match last_state.try_get_metadata().get_state() {
             DerivationState::Finished => {
                 Err("No derivation in progress, there is nothing to continue".into())
             }
             _ => {
-                handle_derivation(last_state.get_metadata().clone(), context)?;
+                handle_derivation(last_state.try_get_metadata().clone(), context)?;
                 Ok(true)
             }
         },
-        (Some(last_state), false, false) => match last_state.get_metadata().get_state() {
+        (Some(last_state), false, false) => match last_state.try_get_metadata().get_state() {
             DerivationState::Starting | DerivationState::InProgress => Err(format!(
                 "Derivation incomplete, please use {} to finish it first",
                 "tangl derive --continue".purple()
@@ -89,8 +89,8 @@ fn get_next_state(
     features: &Vec<NodePath<ConcreteFeature>>,
     product: &NodePath<ConcreteProduct>,
     context: &mut CommandContext,
-) -> Result<Option<DerivationMetadata>, Box<dyn Error>> {
-    let commits = context.git.get_commit_history(product)?;
+) -> Result<Option<DerivationData>, Box<dyn Error>> {
+    let commits = context.git.iter_commit_history(product)?;
     let current_commit = commits[0].clone();
     let mut first = false;
     let mut state = match (progress, optimization, !features.is_empty()) {
@@ -99,23 +99,23 @@ fn get_next_state(
         }
         (None, _, true) => {
             first = true;
-            DerivationMetadata::new_initial(
+            DerivationData::new_initial(
                 FeatureMetadata::from_features(&features),
                 current_commit.get_hash(),
             )
         }
-        (Some(progress), true, false) => match progress.get_metadata().get_state() {
+        (Some(progress), true, false) => match progress.try_get_metadata().get_state() {
             DerivationState::Finished => {
                 return Err("Cannot optimize merge order: No derivation in progress".into());
             }
-            _ => progress.get_metadata().clone(),
+            _ => progress.try_get_metadata().clone(),
         },
         (Some(progress), _, true) => {
-            match progress.get_metadata().get_state() {
+            match progress.try_get_metadata().get_state() {
                 DerivationState::Finished => {
                     first = true;
-                    DerivationMetadata::new_from_previously_finished(
-                        &progress.get_metadata(),
+                    DerivationData::new_from_previously_finished(
+                        &progress.try_get_metadata(),
                         FeatureMetadata::from_features(&features),
                         current_commit.get_hash(),
                     )
@@ -192,7 +192,7 @@ fn get_next_state(
 }
 
 fn handle_derivation(
-    mut progress: DerivationMetadata,
+    mut progress: DerivationData,
     context: &mut CommandContext,
 ) -> Result<(), Box<dyn Error>> {
     let missing_qualified = progress
@@ -315,15 +315,13 @@ impl CommandInterface for DeriveCommand {
     fn run_command(&self, context: &mut CommandContext) -> Result<(), Box<dyn Error>> {
         let current_area = context.git.get_current_area()?;
         let current_path = context.git.assert_current_node_path::<AnyHasBranch>()?;
-        let product_path = match current_path
-            .try_convert_to::<ConcreteProduct>()
-        {
+        let product_path = match current_path.try_convert_to::<ConcreteProduct>() {
             Some(path) => path,
             _ => {
                 return Err(format!(
                     "Current branch is not a product. You can create one with the {} command and/or {} one.",
-                    "product".purple(),
-                    "checkout".purple(),
+                    format_command_help("product"),
+                    format_command_help("checkout"),
                 )
                 .into());
             }
@@ -349,7 +347,7 @@ impl CommandInterface for DeriveCommand {
             .get_argument_value::<bool>(OPTIMIZATION)
             .unwrap();
 
-        let commits = context.git.get_derivation_commits(&product_path)?;
+        let commits = context.git.iter_commit_history(&product_path)?;
         let last_state = commits.get(0);
         let features = assert_features_exist(&all_feature_paths, &context.git)?;
 

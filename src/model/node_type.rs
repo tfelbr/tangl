@@ -233,11 +233,7 @@ pub enum NodeType {
 }
 
 impl NodeType {
-    pub fn decide_next_type(
-        &self,
-        name: &str,
-        metadata: &NodeMetadata,
-    ) -> NodeType {
+    pub fn decide_next_type(&self, name: &str, metadata: &NodeMetadata) -> NodeType {
         match self {
             Self::ConcreteFeature | Self::AbstractFeature | Self::FeatureRoot => {
                 if metadata.has_branch() {

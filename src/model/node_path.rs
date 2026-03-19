@@ -59,7 +59,10 @@ impl NodePath<ConcreteArea> {
     }
     pub fn move_to_feature_root(self) -> Option<NodePath<FeatureRoot>> {
         if self.unknown_mode {
-            Some(NodePath::<FeatureRoot>::new(vec![self.path[0].clone()], self.unknown_mode))
+            Some(NodePath::<FeatureRoot>::new(
+                vec![self.path[0].clone()],
+                self.unknown_mode,
+            ))
         } else {
             self.move_to(&QualifiedPath::from(FEATURES_PREFIX))?
                 .try_convert_to()
@@ -67,7 +70,10 @@ impl NodePath<ConcreteArea> {
     }
     pub fn move_to_product_root(self) -> Option<NodePath<ProductRoot>> {
         if self.unknown_mode {
-            Some(NodePath::<ProductRoot>::new(vec![self.path[0].clone()], self.unknown_mode))
+            Some(NodePath::<ProductRoot>::new(
+                vec![self.path[0].clone()],
+                self.unknown_mode,
+            ))
         } else {
             self.move_to(&QualifiedPath::from(PRODUCTS_PREFIX))?
                 .try_convert_to()

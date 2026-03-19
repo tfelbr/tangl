@@ -38,22 +38,22 @@ impl CommandInterface for StatusCommand {
             let derivation_commits = context.git.get_derivation_commits(&product)?;
             let maybe_last = derivation_commits.first();
             if let Some(last) = maybe_last {
-                match last.get_metadata().get_state() {
+                match last.try_get_metadata().get_state() {
                     DerivationState::Finished => context.info("No derivation in progress"),
                     _ => {
                         context.info("\nDerivation in progress");
-                        if !last.get_metadata().get_completed().is_empty() {
+                        if !last.try_get_metadata().get_completed().is_empty() {
                             context.info("\nFeatures merged:");
-                            for feature in last.get_metadata().get_completed() {
+                            for feature in last.try_get_metadata().get_completed() {
                                 context.info(format!(
                                     "    {}",
                                     feature.get_qualified_path().to_string().green()
                                 ));
                             }
                         }
-                        if !last.get_metadata().get_missing().is_empty() {
+                        if !last.try_get_metadata().get_missing().is_empty() {
                             context.info("\nFeatures remaining:");
-                            for feature in last.get_metadata().get_missing() {
+                            for feature in last.try_get_metadata().get_missing() {
                                 context.info(format!(
                                     "    {}",
                                     feature.get_qualified_path().to_string().red()
@@ -64,7 +64,7 @@ impl CommandInterface for StatusCommand {
                             context.info("\nCurrently merging:");
                             context.info(format!(
                                 "    {}",
-                                last.get_metadata()
+                                last.try_get_metadata()
                                     .get_missing()
                                     .first()
                                     .unwrap()

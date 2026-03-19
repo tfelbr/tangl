@@ -1,9 +1,30 @@
-use crate::model::DerivationMetadata;
 use serde::Deserialize;
 
-pub trait GitCommit {
-    fn get_hash(&self) -> &String;
-    fn get_message(&self) -> &String;
+pub trait CommitMetadata where Self: Sized {
+    fn header() -> String;
+    fn from_json<S: Into<String>>(content: S) -> serde_json::error::Result<Self>;
+    fn to_json(&self) -> serde_json::error::Result<String>;
+    fn to_commit_message(&self) -> serde_json::error::Result<String> {
+        let base = Self::header() + "\n";
+        let serialized = self.to_json()?;
+        Ok(base + serialized.as_str())
+    }
+}
+
+pub struct Base {}
+
+impl CommitMetadata for Base {
+    fn header() -> String {
+        "".to_string()
+    }
+
+    fn from_json<S: Into<String>>(_content: S) -> serde_json::Result<Self> {
+        Ok(Self {})
+    }
+
+    fn to_json(&self) -> serde_json::Result<String> {
+        Ok("".to_string())
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -22,69 +43,30 @@ impl PartialEq for Commit {
     }
 }
 
-impl GitCommit for Commit {
+impl Commit {
+    pub fn new<S1: Into<String>, S2: Into<String>>(
+        hash: S1,
+        message: S2,
+    ) -> Self {
+        Self {
+            hash: hash.into(),
+            message: message.into(),
+        }
+    }
     fn get_hash(&self) -> &String {
         &self.hash
     }
     fn get_message(&self) -> &String {
         &self.message
     }
-}
-
-impl Commit {
-    pub fn new<S1: Into<String>, S2: Into<String>>(hash: S1, message: S2) -> Self {
-        Self {
-            hash: hash.into(),
-            message: message.into(),
-        }
-    }
-}
-
-const DERIVATION_COMMENT: &str = "# DO NOT EDIT OR REMOVE THIS COMMIT\nDERIVATION STATUS\n";
-
-pub struct DerivationCommit {
-    base_commit: Commit,
-    metadata: DerivationMetadata,
-}
-
-impl GitCommit for DerivationCommit {
-    fn get_hash(&self) -> &String {
-        self.base_commit.get_hash()
-    }
-
-    fn get_message(&self) -> &String {
-        self.base_commit.get_message()
-    }
-}
-
-impl DerivationCommit {
-    pub fn from_commit(base_commit: Commit) -> Option<serde_json::error::Result<Self>> {
-        if !base_commit.get_message().contains(DERIVATION_COMMENT) {
-            return None;
-        }
-        let metadata = DerivationMetadata::from_json(
-            base_commit
-                .get_message()
-                .strip_prefix(DERIVATION_COMMENT)
-                .unwrap()
-                .to_string(),
-        );
-        match metadata {
-            Ok(metadata) => Some(Ok(Self {
-                base_commit,
-                metadata,
-            })),
-            Err(e) => Some(Err(e)),
-        }
-    }
-    pub fn make_derivation_message(
-        metadata: &DerivationMetadata,
-    ) -> serde_json::error::Result<String> {
-        let base = DERIVATION_COMMENT.to_string();
-        let serialized = metadata.to_json()?;
-        Ok(base + serialized.as_str())
-    }
-    pub fn get_metadata(&self) -> &DerivationMetadata {
-        &self.metadata
+    fn try_get_metadata<M: CommitMetadata>(&self) -> serde_json::error::Result<M> {
+        let to_parse = self
+            .get_message()
+            .split(M::header().as_str())
+            .collect::<Vec<&str>>()
+            .get(1)
+            .cloned()
+            .unwrap();
+        M::from_json(to_parse)
     }
 }

@@ -24,7 +24,7 @@ fn assert_target_commit_between_derivations(
         if commit_found {
             if let Some(result) = DerivationCommit::from_commit(commit.clone()) {
                 match result {
-                    Ok(dc) => match dc.get_metadata().get_state() {
+                    Ok(dc) => match dc.try_get_metadata().get_state() {
                         DerivationState::Finished => {
                             derivation_commit = Some(dc);
                             break;
@@ -89,7 +89,7 @@ impl CommandInterface for UntieCommand {
             .unwrap();
         let maybe_feature = context.arg_helper.get_argument_value::<String>(FEATURE);
 
-        let commits = context.git.get_commit_history(&product)?;
+        let commits = context.git.iter_commit_history(&product)?;
         if commits.is_empty() {
             context.info("No commits on product");
             return Ok(());
@@ -101,7 +101,7 @@ impl CommandInterface for UntieCommand {
         let finished_derivation =
             assert_target_commit_between_derivations(&target_commit_hash, &commits)?;
         let raw_features = finished_derivation
-            .get_metadata()
+            .try_get_metadata()
             .get_total()
             .iter()
             .map(|p| p.get_qualified_path())

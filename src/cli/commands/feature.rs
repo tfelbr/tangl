@@ -63,7 +63,8 @@ impl CommandInterface for FeatureCommand {
                 let to_delete = if let Some(feature) = current.try_convert_to::<ConcreteFeature>() {
                     feature.to_qualified_path() + delete.to_qualified_path()
                 } else {
-                    context.git.get_current_area()?.get_path_to_feature_root() + delete.to_qualified_path()
+                    context.git.get_current_area()?.get_path_to_feature_root()
+                        + delete.to_qualified_path()
                 };
                 delete_path::<ConcreteFeature>(&to_delete, context)?;
                 return Ok(());
@@ -86,23 +87,26 @@ impl CommandInterface for FeatureCommand {
         context: &mut CommandContext,
     ) -> Result<Vec<String>, Box<dyn Error>> {
         let maybe_feature_root = context.git.get_current_area()?.move_to_feature_root();
-        if maybe_feature_root.is_none() { return Ok(vec![]); }
+        if maybe_feature_root.is_none() {
+            return Ok(vec![]);
+        }
         let feature_root = maybe_feature_root.unwrap();
         let result = match completion_helper.currently_editing() {
             Some(arg) => match arg.get_id().as_str() {
                 "delete" => {
                     let current = context.git.assert_current_node_path::<AnyHasBranch>()?;
-                    let reference = if let Some(feature) = current.try_convert_to::<ConcreteFeature>() {
-                        feature.to_qualified_path()
-                    } else {
-                        feature_root.to_qualified_path()
-                    };
+                    let reference =
+                        if let Some(feature) = current.try_convert_to::<ConcreteFeature>() {
+                            feature.to_qualified_path()
+                        } else {
+                            feature_root.to_qualified_path()
+                        };
                     completion_helper.complete_qualified_paths(
                         reference,
                         HasBranchFilteringNodePathTransformer::new(true)
                             .transform(feature_root.iter_children_req())
                             .map(|path| path.to_qualified_path()),
-                    )   
+                    )
                 }
                 _ => {
                     vec![]
@@ -148,10 +152,10 @@ mod tests {
                 let interface = GitInterface::in_directory(path_buf);
                 check_existence(&interface).unwrap();
                 let branch_history = interface
-                    .get_commit_history(&QualifiedPath::from("/main/feature/root"))
+                    .iter_commit_history(&QualifiedPath::from("/main/feature/root"))
                     .unwrap();
                 let main_history = interface
-                    .get_commit_history(&QualifiedPath::from("/main"))
+                    .iter_commit_history(&QualifiedPath::from("/main"))
                     .unwrap();
                 assert_eq!(branch_history, main_history);
             }
@@ -190,10 +194,10 @@ mod tests {
                 let interface = GitInterface::in_directory(path_buf);
                 check_existence(&interface).unwrap();
                 let branch_history = interface
-                    .get_commit_history(&QualifiedPath::from("/main/feature/root/foo/1"))
+                    .iter_commit_history(&QualifiedPath::from("/main/feature/root/foo/1"))
                     .unwrap();
                 let main_history = interface
-                    .get_commit_history(&QualifiedPath::from("/main"))
+                    .iter_commit_history(&QualifiedPath::from("/main"))
                     .unwrap();
                 assert_eq!(branch_history, main_history);
             }

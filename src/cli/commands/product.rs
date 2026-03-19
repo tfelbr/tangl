@@ -6,7 +6,6 @@ use std::error::Error;
 
 const PRODUCT: &str = "product";
 
-
 fn add_product(product: QualifiedPath, context: &mut CommandContext) -> Result<(), Box<dyn Error>> {
     let node_path = context.git.assert_current_node_path::<AnyHasBranch>()?;
     let current_path = if let Some(path) = node_path.try_convert_to::<ConcreteProduct>() {
@@ -65,7 +64,8 @@ impl CommandInterface for ProductCommand {
             let to_delete = if let Some(product) = current.try_convert_to::<ConcreteProduct>() {
                 product.to_qualified_path() + delete.to_qualified_path()
             } else {
-                context.git.get_current_area()?.get_path_to_product_root() + delete.to_qualified_path()
+                context.git.get_current_area()?.get_path_to_product_root()
+                    + delete.to_qualified_path()
             };
             delete_path::<ConcreteProduct>(&to_delete, context)?;
         } else if maybe_product.is_some() {

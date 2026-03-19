@@ -5,6 +5,31 @@ use std::io;
 use std::path::PathBuf;
 use std::process::{Command, Output};
 
+pub struct CommitIterator<'a> {
+    hashes: Vec<String>,
+    git: &'a GitInterface,
+    current_position: usize,
+}
+
+impl<'a> CommitIterator<'a> {
+    pub fn new(hashes: Vec<String>, git: &'a GitInterface) -> Self {
+        Self { hashes, git, current_position: 0 }
+    }
+}
+
+impl<'a> Iterator for CommitIterator<'a> {
+    type Item = Result<Commit, io::Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current_position < self.hashes.len() {
+            let hash = self.hashes.get(self.current_position).unwrap();
+            let commit = self.git.get_commit(hash);
+            self.current_position += 1;
+            Some(commit)
+        } else { None }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum GitPath {
     CurrentDirectory,
@@ -127,14 +152,11 @@ impl GitInterface {
             Ok(path) => Ok(path),
             Err(error) => match error {
                 ModelError::WrongNodeType(_) => {
-                    let message = format!(
-                        "Current branch is not of type '{}'",
-                        T::identifier(),
-                    );
+                    let message = format!("Current branch is not of type '{}'", T::identifier(),);
                     Err(ModelError::WrongNodeType(WrongNodeTypeError::new(message)).into())
-                },
+                }
                 _ => unreachable!(),
-            }
+            },
         }
     }
     pub fn get_current_area(&self) -> Result<NodePath<ConcreteArea>, GitError> {
@@ -165,7 +187,10 @@ impl GitInterface {
         let commands = vec!["branch", branch.as_str()];
         Ok(self.raw_git_interface.run(commands)?)
     }
-    pub fn create_branch<T: SymbolicNodeType>(&mut self, path: &QualifiedPath) -> Result<NodePath<T>, GitError> {
+    pub fn create_branch<T: SymbolicNodeType>(
+        &mut self,
+        path: &QualifiedPath,
+    ) -> Result<NodePath<T>, GitError> {
         let node_type = self.model.insert_qualified_path(path.clone(), false);
         if !T::is_compatible(&node_type) {
             let message = format!(
@@ -220,10 +245,16 @@ impl GitInterface {
             .raw_git_interface
             .run(vec!["tag", "-d", tagged.to_git_branch().as_str()])?)
     }
-    pub fn get_commit_history<T: HasBranch>(
+    pub fn get_commit<S: Into<String>>(&self, hash: S) -> Result<Commit, io::Error> {
+        let h = hash.into();
+        let out = self.raw_git_interface.run(vec!["log", "--format=%B", "-n 1", h.as_str()])?;
+        let message = String::from_utf8(out.stdout).unwrap();
+        Ok(Commit::new(h, message))
+    }
+    pub fn iter_commit_history<T: HasBranch>(
         &self,
         branch: &NodePath<T>,
-    ) -> Result<Vec<Commit>, GitError> {
+    ) -> Result<CommitIterator, io::Error> {
         let raw_hashes = u8_to_string(
             &self
                 .raw_git_interface
@@ -236,40 +267,11 @@ impl GitInterface {
         )
         .trim()
         .to_string();
-        let all_hashes = raw_hashes.split("\n").collect::<Vec<&str>>();
-        let commits: Vec<Commit> = all_hashes
-            .into_iter()
-            .map(|hash| {
-                let trimmed = hash.trim();
-                let commit_message = u8_to_string(
-                    &self
-                        .raw_git_interface
-                        .run(vec!["log", "--format=%B", "-n 1", trimmed])
-                        .unwrap()
-                        .stdout,
-                )
-                .trim()
-                .to_string();
-                Commit::new(trimmed, commit_message)
-            })
-            .collect();
-        Ok(commits)
-    }
-    pub fn get_derivation_commits(
-        &self,
-        path: &NodePath<ConcreteProduct>,
-    ) -> Result<Vec<DerivationCommit>, GitError> {
-        let mut derivation_commits: Vec<DerivationCommit> = vec![];
-        for commit in self.get_commit_history(path)? {
-            match DerivationCommit::from_commit(commit) {
-                Some(c) => match c {
-                    Ok(c) => derivation_commits.push(c),
-                    Err(e) => return Err(e.into()),
-                },
-                None => {}
-            }
-        }
-        Ok(derivation_commits)
+        let all_hashes = raw_hashes
+            .split("\n")
+            .map(|line| line.to_string())
+            .collect::<Vec<_>>();
+        Ok(CommitIterator::new(all_hashes, &self))
     }
     pub fn get_files_managed_by_branch<T: HasBranch>(
         &self,

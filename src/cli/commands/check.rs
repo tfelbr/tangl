@@ -2,10 +2,9 @@ use crate::cli::completion::CompletionHelper;
 use crate::cli::*;
 use crate::git::conflict::{ConflictChecker, ConflictStatistics};
 use crate::model::{
-    ByGlobFilteringNodePathTransformer, ChainingNodePathTransformer, AnyHasBranch,
-    ConcreteFeature, ConcreteProduct, FeatureMetadata, FilteringMode,
-    HasBranchFilteringNodePathTransformer, NodePath, NodePathTransformer, NodePathTransformers,
-    QualifiedPath, ToQualifiedPath,
+    AnyHasBranch, ByGlobFilteringNodePathTransformer, ChainingNodePathTransformer, ConcreteFeature,
+    ConcreteProduct, FeatureMetadata, FilteringMode, HasBranchFilteringNodePathTransformer,
+    NodePath, NodePathTransformer, NodePathTransformers, QualifiedPath, ToQualifiedPath,
 };
 use clap::{Arg, ArgAction, Command};
 use colored::Colorize;
@@ -160,7 +159,7 @@ impl CommandInterface for CheckCommand {
                 if maybe_last.is_none() {
                     return Err("Nothing to check against: product not derived yet".into());
                 }
-                let feature_meta = maybe_last.unwrap().get_metadata().get_total();
+                let feature_meta = maybe_last.unwrap().try_get_metadata().get_total();
                 let features = FeatureMetadata::qualified_paths(feature_meta);
                 let node_paths = context
                     .git

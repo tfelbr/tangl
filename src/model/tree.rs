@@ -23,11 +23,7 @@ impl TreeDataModel {
             unknowns_exist: false,
         }
     }
-    pub fn insert_qualified_path(
-        &mut self,
-        path: QualifiedPath,
-        is_tag: bool,
-    ) -> NodeType {
+    pub fn insert_qualified_path(&mut self, path: QualifiedPath, is_tag: bool) -> NodeType {
         if !path.is_absolute() {
             panic!("To insert a path, it must be absolute");
         }
@@ -101,7 +97,9 @@ mod tests {
     fn tree_node_path_with_virtual_root() {
         let mut tree = TreeDataModel::new();
         tree.insert_qualified_path(QualifiedPath::from("/main"), false);
-        let path = tree.get_node_path::<AnyNode>(&QualifiedPath::from("/main")).unwrap();
+        let path = tree
+            .get_node_path::<AnyNode>(&QualifiedPath::from("/main"))
+            .unwrap();
         assert_eq!(path.to_qualified_path(), "/main")
     }
 }

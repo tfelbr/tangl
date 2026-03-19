@@ -31,7 +31,7 @@ pub fn verbose() -> Arg {
 }
 
 pub fn format_command_help<S: Into<String>>(command: S) -> String {
-    command.into().purple().to_string()
+    command.into().yellow().to_string()
 }
 
 pub fn delete_path<T: HasBranch>(
@@ -42,7 +42,11 @@ pub fn delete_path<T: HasBranch>(
         Ok(concrete_path) => {
             let concrete_type = concrete_path.get_actual_type().clone();
             context.git.delete_branch(concrete_path)?;
-            context.info(format!("Deleted {} branch {}", concrete_type.get_formatted_name(), path.to_string().blue()));
+            context.info(format!(
+                "Deleted {} branch {}",
+                concrete_type.get_formatted_name(),
+                path.to_string().blue()
+            ));
         }
         Err(error) => {
             return Err(error.into());

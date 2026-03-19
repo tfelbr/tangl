@@ -161,12 +161,8 @@ impl Node {
             0 => self.node_type.clone(),
             1 => {
                 let new_type = match self.get_child_mut(&name) {
-                    Some(_) => {
-                        self.update_child(name, metadata, is_tag)
-                    }
-                    None => {
-                        self.add_child(name.clone(), metadata, is_tag)
-                    }
+                    Some(_) => self.update_child(name, metadata, is_tag),
+                    None => self.add_child(name.clone(), metadata, is_tag),
                 };
                 new_type
             }
