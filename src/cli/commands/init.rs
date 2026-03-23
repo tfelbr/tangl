@@ -16,7 +16,7 @@ impl CommandDefinition for InitCommand {
 impl CommandInterface for InitCommand {
     fn run_command(&self, context: &mut CommandContext) -> Result<(), Box<dyn Error>> {
         let output = context.git.initialize_repo()?;
-        context.info(output);
+        context.logger.info(output);
         Ok(())
     }
 }

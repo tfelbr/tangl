@@ -42,7 +42,7 @@ pub fn delete_path<T: HasBranch>(
         Ok(concrete_path) => {
             let concrete_type = concrete_path.get_actual_type().clone();
             context.git.delete_branch(concrete_path)?;
-            context.info(format!(
+            context.logger.info(format!(
                 "Deleted {} branch {}",
                 concrete_type.get_formatted_name(),
                 path.to_string().blue()

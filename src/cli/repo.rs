@@ -1,5 +1,6 @@
 use crate::cli::{ArgHelper, CommandContext, CommandImpl, CommandMap, VERBOSE};
 use crate::git::interface::{GitInterface, GitPath};
+use crate::logging::TanglLogger;
 use crate::model::ImportFormat;
 use clap::ArgMatches;
 use log::LevelFilter;
@@ -64,7 +65,7 @@ impl CommandRepository {
                         .args(ext_args)
                         .output()
                         .expect("failed to execute git");
-                    context.log_from_output(&output);
+                    context.logger.info(String::from_utf8_lossy(&output.stdout));
                     Ok(context)
                 }
             }
@@ -93,6 +94,7 @@ impl CommandRepository {
             &self.command_map,
             &self.command_map,
             GitInterface::new(self.work_path.clone()),
+            TanglLogger::new(),
             ArgHelper::new(args),
             import_format,
         )

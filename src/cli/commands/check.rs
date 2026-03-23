@@ -1,9 +1,9 @@
 use crate::cli::completion::CompletionHelper;
 use crate::cli::*;
-use crate::git::conflict::{ConflictChecker, MergeChainStatistics};
+use crate::git::conflict::{ConflictChecker, MergeChainStatistic, MergeChainStatistics};
 use crate::git::error::GitError;
 use crate::model::*;
-use crate::spl::{FeatureMetadata, InspectionManager};
+use crate::spl::InspectionManager;
 use clap::{Arg, ArgAction, Command};
 use colored::Colorize;
 use std::error::Error;
@@ -159,8 +159,8 @@ impl CommandInterface for CheckCommand {
                 if state.get_total().len() == 0 {
                     return Err("Nothing to check against: product not derived yet".into());
                 }
-                let feature_meta = state.get_total();
-                let features = FeatureMetadata::qualified_paths(feature_meta);
+                let feature_meta: &MergeChainStatistic = &state.get_total().into();
+                let features = feature_meta.into();
                 let node_paths = context
                     .git
                     .get_model()
@@ -217,13 +217,13 @@ impl CommandInterface for CheckCommand {
 
         for statistic in statistics.iter_all() {
             if statistic.contains_conflicts() {
-                context.info(statistic.display_as_path());
+                context.logger.info(statistic.display_as_path());
             } else {
-                context.debug(statistic.display_as_path());
+                context.logger.debug(statistic.display_as_path());
             }
         }
         if statistics.n_conflicts() == 0 {
-            context.info("No conflicts".green().to_string());
+            context.logger.info("No conflicts".green().to_string());
         }
         Ok(())
     }

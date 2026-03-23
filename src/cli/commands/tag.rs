@@ -18,34 +18,34 @@ impl CommandDefinition for TagCommand {
 
 impl CommandInterface for TagCommand {
     fn run_command(&self, context: &mut CommandContext) -> Result<(), Box<dyn Error>> {
-        let tag = context.arg_helper.get_argument_value::<String>("tag");
-        let delete = context.arg_helper.get_argument_value::<String>("delete");
-
-        match delete {
-            Some(delete) => {
-                let output = context.git.delete_tag(&QualifiedPath::from(delete))?;
-                context.log_from_output(&output);
-                return Ok(());
-            }
-            None => {}
-        }
-        match tag {
-            Some(tag) => {
-                let output = context.git.create_tag(&QualifiedPath::from(tag))?;
-                context.log_from_output(&output);
-            }
-            None => {
-                let current_branch = context.git.assert_current_node_path::<AnyHasBranch>()?;
-                let tags = current_branch.get_tags();
-                if tags.is_empty() {
-                    context.info("No tags on current branch");
-                } else {
-                    for tag in tags {
-                        context.info(tag)
-                    }
-                }
-            }
-        }
+        // let tag = context.arg_helper.get_argument_value::<String>("tag");
+        // let delete = context.arg_helper.get_argument_value::<String>("delete");
+        //
+        // match delete {
+        //     Some(delete) => {
+        //         let output = context.git.delete_tag(&QualifiedPath::from(delete))?;
+        //         context.log_from_output(&output);
+        //         return Ok(());
+        //     }
+        //     None => {}
+        // }
+        // match tag {
+        //     Some(tag) => {
+        //         let output = context.git.create_tag(&QualifiedPath::from(tag))?;
+        //         context.log_from_output(&output);
+        //     }
+        //     None => {
+        //         let current_branch = context.git.assert_current_node_path::<AnyHasBranch>()?;
+        //         let tags = current_branch.get_tags();
+        //         if tags.is_empty() {
+        //             context.info("No tags on current branch");
+        //         } else {
+        //             for tag in tags {
+        //                 context.info(tag)
+        //             }
+        //         }
+        //     }
+        // }
         Ok(())
     }
 }

@@ -20,7 +20,7 @@ fn add_product(product: QualifiedPath, context: &mut CommandContext) -> Result<(
     drop(node_path);
     let target_path = current_path + product;
     let result = context.git.create_branch::<ConcreteProduct>(&target_path)?;
-    context.info(format!(
+    context.logger.info(format!(
         "Created new {} {}",
         NodeType::ConcreteProduct.get_formatted_name(),
         result.to_qualified_path().strip_n_left(3),
@@ -32,7 +32,7 @@ fn print_product_tree(context: &mut CommandContext) -> Result<(), Box<dyn Error>
     let area = context.git.get_current_area()?;
     match area.move_to_product_root() {
         Some(path) => {
-            context.info(path.display_tree(false).trim());
+            context.logger.info(path.display_tree(false).trim());
         }
         None => {}
     }

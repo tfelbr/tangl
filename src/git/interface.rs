@@ -1,18 +1,24 @@
 use crate::git::conflict::{MergeConflict, MergeStatistic, MergeSuccess};
 use crate::git::error::{GitCommandError, GitError, GitWrongNodeTypeError};
 use crate::model::*;
-use crate::util::u8_to_string;
 use std::io;
 use std::path::PathBuf;
 use std::process::{Command, Output};
 
-fn output_to_result(output: Output) -> Result<String, GitCommandError> {
+fn output_to_result(output: Output, command: &Vec<&str>) -> Result<String, GitCommandError> {
+    let stdout = String::from_utf8(output.stdout).unwrap().trim().to_string();
+    let stderr = String::from_utf8(output.stderr).unwrap().trim().to_string();
+    let message = format!("{}\n{}", stdout, stderr).trim().to_string();
     if output.status.success() {
-        Ok(String::from_utf8(output.stdout).unwrap().trim().to_string())
+        Ok(message)
     } else {
-        Err(GitCommandError::new(
-            String::from_utf8(output.stderr).unwrap().trim().to_string(),
-        ))
+        let code = output.status.code().unwrap();
+        let git_command = command.join(" ");
+        let error = format!(
+            "fatal: Command 'git {}' returned with exit code {}:\n",
+            git_command, code
+        );
+        Err(GitCommandError::new(error + message.as_str()))
     }
 }
 
@@ -43,7 +49,7 @@ impl GitCLI {
     pub fn colored(&mut self, colored: bool) {
         self.colored = colored;
     }
-    pub fn run(&self, args: Vec<&str>) -> io::Result<Output> {
+    pub fn run(&self, args: &Vec<&str>) -> io::Result<Output> {
         let mut base = Command::new("git");
         let mut arguments: Vec<String> = vec![];
         match self.path {
@@ -94,8 +100,10 @@ impl GitInterface {
     }
 
     fn update_complete_model(&mut self) -> Result<(), io::Error> {
-        let branch_output = self.raw_git_interface.run(vec!["branch"])?;
-        let all_branches: Vec<String> = u8_to_string(&branch_output.stdout)
+        let branch_command = vec!["branch"];
+        let branch_output = self.raw_git_interface.run(&branch_command)?;
+        let all_branches: Vec<String> = String::from_utf8(branch_output.stdout)
+            .unwrap()
             .split("\n")
             .map(|raw_string| raw_string.replace("*", ""))
             .collect();
@@ -106,8 +114,10 @@ impl GitInterface {
                 self.model.insert_qualified_path(path, false);
             }
         }
-        let tag_output = self.raw_git_interface.run(vec!["tag"])?;
-        let all_tags: Vec<String> = u8_to_string(&tag_output.stdout)
+        let tag_command = vec!["tag"];
+        let tag_output = self.raw_git_interface.run(&tag_command)?;
+        let all_tags: Vec<String> = String::from_utf8(tag_output.stdout)
+            .unwrap()
             .split("\n")
             .map(|raw_string| raw_string.replace("*", ""))
             .collect();
@@ -126,10 +136,9 @@ impl GitInterface {
     }
 
     fn get_current_branch(&self) -> Result<String, GitError> {
-        let out = self
-            .raw_git_interface
-            .run(vec!["branch", "--show-current"])?;
-        Ok(output_to_result(out)?)
+        let command = vec!["branch", "--show-current"];
+        let out = self.raw_git_interface.run(&command)?;
+        Ok(output_to_result(out, &command)?)
     }
 
     pub fn get_current_qualified_path(&self) -> Result<QualifiedPath, GitError> {
@@ -163,23 +172,22 @@ impl GitInterface {
 
     // all git commands
     pub fn initialize_repo(&self) -> Result<String, GitError> {
-        let out = self
-            .raw_git_interface
-            .run(vec!["init", "--initial-branch=main"])?;
-        Ok(output_to_result(out)?)
+        let command = vec!["init", "--initial-branch=main"];
+        let out = self.raw_git_interface.run(&command)?;
+        Ok(output_to_result(out, &command)?)
     }
 
     pub fn status(&self) -> Result<String, GitError> {
-        Ok(output_to_result(
-            self.raw_git_interface.run(vec!["status"])?,
-        )?)
+        let command = vec!["status"];
+        let out = self.raw_git_interface.run(&command)?;
+        Ok(output_to_result(out, &command)?)
     }
 
     pub(super) fn checkout_raw(&self, path: &QualifiedPath) -> Result<String, GitError> {
-        let out = self
-            .raw_git_interface
-            .run(vec!["checkout", path.to_git_branch().as_str()])?;
-        Ok(output_to_result(out)?)
+        let branch = path.to_git_branch();
+        let command = vec!["checkout", branch.as_str()];
+        let out = self.raw_git_interface.run(&command)?;
+        Ok(output_to_result(out, &command)?)
     }
 
     pub fn checkout<T: HasBranch>(&self, path: &NodePath<T>) -> Result<String, GitError> {
@@ -188,8 +196,11 @@ impl GitInterface {
 
     pub(super) fn create_branch_no_mut(&self, path: &QualifiedPath) -> Result<String, GitError> {
         let branch = path.to_git_branch();
-        let commands = vec!["branch", branch.as_str()];
-        Ok(output_to_result(self.raw_git_interface.run(commands)?)?)
+        let command = vec!["branch", branch.as_str()];
+        Ok(output_to_result(
+            self.raw_git_interface.run(&command)?,
+            &command,
+        )?)
     }
 
     pub fn create_branch<T: SymbolicNodeType>(
@@ -211,9 +222,9 @@ impl GitInterface {
 
     pub(super) fn delete_branch_no_mut(&self, path: &QualifiedPath) -> Result<String, GitError> {
         let branch = path.to_git_branch();
-        let commands = vec!["branch", "-D", branch.as_str()];
-        let out = self.raw_git_interface.run(commands)?;
-        Ok(output_to_result(out)?)
+        let command = vec!["branch", "-D", branch.as_str()];
+        let out = self.raw_git_interface.run(&command)?;
+        Ok(output_to_result(out, &command)?)
     }
 
     pub fn delete_branch<T: HasBranch>(&mut self, path: NodePath<T>) -> Result<String, GitError> {
@@ -224,10 +235,9 @@ impl GitInterface {
         &self,
         path: &NodePath<T>,
     ) -> Result<(MergeStatistic, String), io::Error> {
-        let out = self.raw_git_interface.run(vec![
-            "merge",
-            path.to_qualified_path().to_git_branch().as_str(),
-        ])?;
+        let branch = path.to_qualified_path().to_git_branch();
+        let command = vec!["merge", branch.as_str()];
+        let out = self.raw_git_interface.run(&command)?;
         let result = if out.status.success() {
             let response = String::from_utf8(out.stdout).unwrap();
             let success = MergeSuccess::new(path.to_qualified_path());
@@ -241,33 +251,37 @@ impl GitInterface {
     }
 
     pub fn abort_merge(&self) -> Result<String, GitError> {
-        Ok(output_to_result(
-            self.raw_git_interface.run(vec!["merge", "--abort"])?,
-        )?)
+        let command = vec!["merge", "--abort"];
+        let out = self.raw_git_interface.run(&command)?;
+        Ok(output_to_result(out, &command)?)
+    }
+    
+    pub fn pending_merge(&self) -> Result<bool, GitError> {
+        let status = self.status()?;
+        Ok(status.contains("merg"))
     }
 
-    pub fn create_tag(&self, tag: &QualifiedPath) -> Result<NodePath<Tag>, GitError> {
-        let current_branch = self.get_current_qualified_path()?;
-        let tagged = current_branch + tag.clone();
-        let out = self
-            .raw_git_interface
-            .run(vec!["tag", tagged.to_git_branch().as_str()])?;
-    }
-
-    pub fn delete_tag(&self, tag: NodePath<Tag>) -> Result<Output, GitError> {
-        let current_branch = self.get_current_qualified_path()?;
-        let tagged = current_branch + tag.clone();
-        Ok(self
-            .raw_git_interface
-            .run(vec!["tag", "-d", tagged.to_git_branch().as_str()])?)
-    }
+    // pub fn create_tag(&mut self, tag: &QualifiedPath) -> Result<NodePath<Tag>, GitError> {
+    //     let current_branch = self.get_current_qualified_path()?;
+    //     let tagged = current_branch + tag.clone();
+    //     let out = self
+    //         .raw_git_interface
+    //         .run(vec!["tag", tagged.to_git_branch().as_str()])?;
+    // }
+    //
+    // pub fn delete_tag(&self, tag: NodePath<Tag>) -> Result<Output, GitError> {
+    //     let current_branch = self.get_current_qualified_path()?;
+    //     let tagged = current_branch + tag.clone();
+    //     Ok(self
+    //         .raw_git_interface
+    //         .run(vec!["tag", "-d", tagged.to_git_branch().as_str()])?)
+    // }
 
     pub fn get_commit_from_hash<S: Into<String>>(&self, hash: S) -> Result<Commit, GitError> {
         let h = hash.into();
-        let out = self
-            .raw_git_interface
-            .run(vec!["log", "--format=%B", "-n 1", h.as_str()])?;
-        let message = output_to_result(out)?;
+        let command = vec!["log", "--format=%B", "-n 1", h.as_str()];
+        let out = self.raw_git_interface.run(&command)?;
+        let message = output_to_result(out, &command)?;
         Ok(Commit::new(h, message))
     }
 
@@ -276,14 +290,11 @@ impl GitInterface {
         branch: &NodePath<T>,
         n: i32,
     ) -> Result<CommitIterator, GitError> {
-        let out = self.raw_git_interface.run(vec![
-            "log",
-            "n",
-            n.to_string().as_str(),
-            "--format=%H",
-            branch.to_qualified_path().to_git_branch().as_str(),
-        ])?;
-        let raw_hashes = output_to_result(out)?.trim().to_string();
+        let n_str = n.to_string();
+        let branch = branch.to_qualified_path().to_git_branch();
+        let command = vec!["log", "-n", n_str.as_str(), "--format=%H", branch.as_str()];
+        let out = self.raw_git_interface.run(&command)?;
+        let raw_hashes = output_to_result(out, &command)?.trim().to_string();
         let all_hashes = raw_hashes
             .split("\n")
             .map(|line| line.to_string())
@@ -304,13 +315,10 @@ impl GitInterface {
         &self,
         branch: &NodePath<T>,
     ) -> Result<Vec<String>, GitError> {
-        let out = self.raw_git_interface.run(vec![
-            "ls-tree",
-            "-r",
-            "--name-only",
-            branch.to_qualified_path().to_git_branch().as_str(),
-        ])?;
-        let message = output_to_result(out)?;
+        let branch = branch.to_qualified_path().to_git_branch();
+        let command = vec!["ls-tree", "-r", "--name-only", branch.as_str()];
+        let out = self.raw_git_interface.run(&command)?;
+        let message = output_to_result(out, &command)?;
         Ok(message.split("\n").map(|e| e.to_string()).collect())
     }
 
@@ -318,53 +326,51 @@ impl GitInterface {
         &self,
         commit: S,
     ) -> Result<Vec<String>, GitError> {
-        let out = self.raw_git_interface.run(vec![
+        let commit_str = commit.into();
+        let command = vec![
             "diff-tree",
             "--no-commit-id",
             "--name-only",
-            commit.into().as_str(),
+            commit_str.as_str(),
             "-r",
-        ])?;
-        let message = output_to_result(out)?;
+        ];
+        let out = self.raw_git_interface.run(&command)?;
+        let message = output_to_result(out, &command)?;
         Ok(message.split("\n").map(|e| e.to_string()).collect())
     }
 
     pub fn commit<S: Into<String>>(&self, message: S) -> Result<String, GitError> {
         let message_string = message.into();
-        let out = self
-            .raw_git_interface
-            .run(vec!["commit", "-m", message_string.as_str()])?;
-        Ok(output_to_result(out)?)
+        let command = vec!["commit", "-m", message_string.as_str()];
+        let out = self.raw_git_interface.run(&command)?;
+        Ok(output_to_result(out, &command)?)
     }
 
     pub fn empty_commit<S: Into<String>>(&self, message: S) -> Result<String, GitError> {
         let message_string = message.into();
-        let out = self.raw_git_interface.run(vec![
-            "commit",
-            "--allow-empty",
-            "-m",
-            message_string.as_str(),
-        ])?;
-        Ok(output_to_result(out)?)
+        let command = vec!["commit", "--allow-empty", "-m", message_string.as_str()];
+        let out = self.raw_git_interface.run(&command)?;
+        Ok(output_to_result(out, &command)?)
     }
 
     pub fn interactive_commit(&self) -> Result<String, GitError> {
-        Ok(output_to_result(
-            self.raw_git_interface.run(vec!["commit"])?,
-        )?)
+        let command = vec!["commit"];
+        let out = self.raw_git_interface.run(&command)?;
+        Ok(output_to_result(out, &command)?)
     }
 
-    pub fn cherry_pick(&self, commit: &str) -> Result<String, GitError> {
-        Ok(output_to_result(
-            self.raw_git_interface.run(vec!["cherry-pick", commit])?,
-        )?)
+    pub fn cherry_pick<S: Into<String>>(&self, commit: S) -> Result<String, GitError> {
+        let commit_str = commit.into();
+        let command = vec!["cherry-pick", commit_str.as_str()];
+        let out = self.raw_git_interface.run(&command)?;
+        Ok(output_to_result(out, &command)?)
     }
 
     pub fn reset_hard<S: Into<String>>(&self, commit: S) -> Result<String, GitError> {
-        let out = self
-            .raw_git_interface
-            .run(vec!["reset", "--hard", commit.into().as_str()])?;
-        Ok(output_to_result(out)?)
+        let commit_str = commit.into();
+        let command = vec!["reset", "--hard", commit_str.as_str()];
+        let out = self.raw_git_interface.run(&command)?;
+        Ok(output_to_result(out, &command)?)
     }
 }
 
@@ -377,12 +383,12 @@ pub mod test_utils {
 
     pub fn prepare_empty_git_repo(path: PathBuf) -> Result<(), GitError> {
         let git = GitCLI::in_custom_directory(path.clone());
-        git.run(vec!["init", "--initial-branch=main"])?;
+        git.run(&vec!["init", "--initial-branch=main"])?;
         let mut file = path.clone();
         file.push("file1");
         fs::write(file.clone(), "")?;
-        let out = git.run(vec!["add", file.to_str().unwrap()])?;
-        let out = git.run(vec!["commit", "-m", "initial commit"])?;
+        let out = git.run(&vec!["add", file.to_str().unwrap()])?;
+        let out = git.run(&vec!["commit", "-m", "initial commit"])?;
         Ok(())
     }
 
@@ -395,7 +401,7 @@ pub mod test_utils {
             "_main/_feature/_root/baz",
         ];
         for branch in branches {
-            git.run(vec!["branch", branch])?;
+            git.run(&vec!["branch", branch])?;
         }
         Ok(())
     }
@@ -404,7 +410,7 @@ pub mod test_utils {
         let git = GitCLI::in_custom_directory(PathBuf::from(path));
         let branches = vec!["_main/_product/myprod"];
         for branch in branches {
-            git.run(vec!["branch", branch])?;
+            git.run(&vec!["branch", branch])?;
         }
         Ok(())
     }

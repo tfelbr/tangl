@@ -1,13 +1,11 @@
 use crate::cli::ArgHelper;
 use crate::cli::completion::CompletionHelper;
 use crate::git::interface::GitInterface;
+use crate::logging::TanglLogger;
 use crate::model::ImportFormat;
-use crate::util::u8_to_string;
 use clap::{ArgMatches, Command};
-use log::{LevelFilter, debug, error, info, trace, warn};
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
-use std::process::Output;
 
 #[derive(Debug)]
 pub struct CommandMap {
@@ -72,6 +70,7 @@ pub struct CommandContext<'a> {
     pub current_command: &'a CommandMap,
     pub root_command: &'a CommandMap,
     pub git: GitInterface,
+    pub logger: TanglLogger,
     pub arg_helper: ArgHelper,
     pub import_format: ImportFormat,
 }
@@ -81,6 +80,7 @@ impl CommandContext<'_> {
         current_command: &'a CommandMap,
         root_command: &'a CommandMap,
         git: GitInterface,
+        logger: TanglLogger,
         arg_helper: ArgHelper,
         import_format: ImportFormat,
     ) -> CommandContext<'a> {
@@ -88,39 +88,9 @@ impl CommandContext<'_> {
             current_command,
             root_command,
             git,
+            logger,
             arg_helper,
             import_format,
-        }
-    }
-    pub fn log_from_output(&self, output: &Output) {
-        self.info(u8_to_string(&output.stdout).trim());
-        self.error(u8_to_string(&output.stderr).trim());
-    }
-    pub fn trace<S: Into<String>>(&self, message: S) {
-        self.log(message, LevelFilter::Trace)
-    }
-    pub fn debug<S: Into<String>>(&self, message: S) {
-        self.log(message, LevelFilter::Debug)
-    }
-    pub fn info<S: Into<String>>(&self, message: S) {
-        self.log(message, LevelFilter::Info)
-    }
-    pub fn warn<S: Into<String>>(&self, message: S) {
-        self.log(message, LevelFilter::Warn)
-    }
-    pub fn error<S: Into<String>>(&self, message: S) {
-        self.log(message, LevelFilter::Error)
-    }
-
-    fn log<S: Into<String>>(&self, message: S, level: LevelFilter) {
-        let converted = message.into();
-        match level {
-            LevelFilter::Error => error!("{}", converted),
-            LevelFilter::Warn => warn!("{}", converted),
-            LevelFilter::Info => info!("{}", converted),
-            LevelFilter::Debug => debug!("{}", converted),
-            LevelFilter::Trace => trace!("{}", converted),
-            LevelFilter::Off => {}
         }
     }
 }

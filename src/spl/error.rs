@@ -71,6 +71,11 @@ impl From<GitSerdeError> for ContinueDerivationError {
         }
     }
 }
+impl From<io::Error> for ContinueDerivationError {
+    fn from(value: io::Error) -> Self {
+        Self::Io(value)
+    }
+}
 impl Display for ContinueDerivationError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {

@@ -46,12 +46,12 @@ impl CommandInterface for CheckoutCommand {
         let current = context.git.get_current_qualified_path()?;
         let out = context.git.checkout(&node_path)?;
         if current == node_path.to_qualified_path() {
-            context.info(format!(
+            context.logger.info(format!(
                 "Already on branch {}",
                 node_path.to_string().blue(),
             ));
         } else {
-            context.info(format!(
+            context.logger.info(format!(
                 "Switched to {} branch {}",
                 node_path.get_actual_type().get_formatted_name(),
                 node_path.to_string().blue(),
@@ -60,7 +60,7 @@ impl CommandInterface for CheckoutCommand {
                 .join("\n")
                 .trim()
                 .to_string();
-            context.info(rest)
+            context.logger.info(rest)
         }
         Ok(())
     }

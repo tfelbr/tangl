@@ -50,7 +50,7 @@ impl CommandInterface for LSCommand {
         match tree {
             true => {
                 let tree = node_path.display_tree(show_tags);
-                context.info(tree.trim());
+                context.logger.info(tree.trim());
             }
             false => {
                 for child in node_path.iter_children().sorted() {
@@ -62,7 +62,7 @@ impl CommandInterface for LSCommand {
                     if child.has_children() {
                         name += "/...".blue().to_string().as_str();
                     }
-                    context.info(format!("{name} [{node_type}]"))
+                    context.logger.info(format!("{name} [{node_type}]"))
                 }
             }
         }

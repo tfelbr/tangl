@@ -18,7 +18,7 @@ fn add_feature(feature: QualifiedPath, context: &mut CommandContext) -> Result<(
     drop(node_path);
     let target_path = current_path + feature;
     let result = context.git.create_branch::<ConcreteFeature>(&target_path)?;
-    context.info(format!(
+    context.logger.info(format!(
         "Created new {} {}",
         NodeType::ConcreteFeature.get_formatted_name(),
         result.to_qualified_path().strip_n_left(3),
@@ -29,7 +29,7 @@ fn print_feature_tree(context: &mut CommandContext, show_tags: bool) -> Result<(
     let area = context.git.get_current_area()?;
     match area.move_to_feature_root() {
         Some(path) => {
-            context.info(path.display_tree(show_tags).trim());
+            context.logger.info(path.display_tree(show_tags).trim());
         }
         None => {}
     }

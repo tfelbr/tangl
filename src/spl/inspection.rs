@@ -1,7 +1,8 @@
+use crate::git::conflict::MergeChainStatistic;
 use crate::git::error::GitError;
 use crate::git::interface::GitInterface;
 use crate::model::*;
-use crate::spl::{DerivationData, DerivationMetadata, FeatureMetadata};
+use crate::spl::{DerivationData, DerivationMetadata};
 use std::error::Error;
 
 pub struct InspectionManager<'a> {
@@ -67,12 +68,13 @@ impl<'a> InspectionManager<'a> {
             for product in product_root.iter_products_req() {
                 if let Some(concrete) = product.try_convert_to::<ConcreteProduct>() {
                     let state = self.get_current_derivation_state(&concrete)?;
-                    let features = FeatureMetadata::qualified_paths(state.get_total());
+                    let total: &MergeChainStatistic = &state.get_total().into();
+                    let features: Vec<QualifiedPath> = total.into();
                     if features.contains(&feature.to_qualified_path()) {
                         products.push(concrete);
                     }
                 }
-            };
+            }
             Ok(products)
         } else {
             Ok(vec![])

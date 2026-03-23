@@ -1,6 +1,6 @@
-use crate::cli::CommandContext;
 use crate::git::error::GitError;
 use crate::git::interface::GitInterface;
+use crate::logging::TanglLogger;
 use crate::model::{AnyHasBranch, NodePath, QualifiedPath, ToQualifiedPath};
 use colored::Colorize;
 use itertools::Itertools;
@@ -37,7 +37,7 @@ impl MergeConflict {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MergeStatistic {
     Base(QualifiedPath),
     Success(MergeSuccess),
@@ -80,10 +80,31 @@ impl Display for MergeStatistic {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct MergeChainStatistic {
     chain: Vec<MergeStatistic>,
     n_success: usize,
     n_conflict: usize,
+}
+
+impl From<&MergeChainStatistic> for Vec<QualifiedPath> {
+    fn from(value: &MergeChainStatistic) -> Self {
+        value
+            .get_chain()
+            .iter()
+            .map(|p| p.get_path().clone())
+            .collect()
+    }
+}
+
+impl From<Vec<MergeStatistic>> for MergeChainStatistic {
+    fn from(value: Vec<MergeStatistic>) -> Self {
+        let mut new = Self::new();
+        for v in value {
+            new.push(v)
+        }
+        new
+    }
 }
 
 impl MergeChainStatistic {
@@ -104,20 +125,48 @@ impl MergeChainStatistic {
         self.chain.push(stat);
     }
 
+    pub fn insert(&mut self, index: usize, stat: MergeStatistic) {
+        match &stat {
+            MergeStatistic::Success(_) => self.n_success += 1,
+            MergeStatistic::Conflict(_) => self.n_conflict += 1,
+            _ => {}
+        }
+        self.chain.insert(index, stat);
+    }
+    
+    pub fn remove(&mut self, index: usize) -> MergeStatistic {
+        let statistic = self.chain.remove(index);
+        match &statistic {
+            MergeStatistic::Success(_) => self.n_success -= 1,
+            MergeStatistic::Conflict(_) => self.n_conflict -= 1,
+            _ => {}
+        }
+        statistic
+    }
+    
+    pub fn get(&self, index: usize) -> Option<&MergeStatistic> {
+        self.chain.get(index)
+    }
+    
+    pub fn replace(&mut self, index: usize, stat: MergeStatistic) {
+        self.remove(index);
+        self.insert(index, stat);
+    }
+
     pub fn get_chain(&self) -> &Vec<MergeStatistic> {
         &self.chain
     }
-
+    pub fn get_n_success(&self) -> usize {
+        self.n_success
+    }
+    pub fn get_n_conflict(&self) -> usize {
+        self.n_conflict
+    }
     pub fn contains_conflicts(&self) -> bool {
         self.n_conflict > 0
     }
-
-    pub fn remove(&mut self, i: usize) -> MergeStatistic {
-        self.chain.remove(i)
-    }
-
     pub fn display_as_path(&self) -> String {
-        self.chain.iter().map(|stat| stat.to_string()).join("<-")
+        self.chain.iter().map(|stat| stat.to_string()).join(" <- ")
     }
 }
 
@@ -149,10 +198,7 @@ impl MergeChainStatistics {
         self.statistics.iter()
     }
     pub fn iter_conflicts(&self) -> impl Iterator<Item = &MergeChainStatistic> {
-        self
-            .statistics
-            .iter()
-            .filter(|s| s.contains_conflicts())
+        self.statistics.iter().filter(|s| s.contains_conflicts())
     }
     pub fn n_ok(&self) -> usize {
         self.total_successes
@@ -338,24 +384,26 @@ impl Conflict2DMatrix {
         }
     }
 
+    pub fn predict_conflicts(&self, order: &Vec<QualifiedPath>) -> MergeChainStatistic {
+        let base = order.get(0).unwrap().clone();
+        let mut final_path = vec![(base, 0)];
+        for path in order[1..].iter() {
+            let voters = final_path.iter().map(|(k, _)| k.clone()).collect();
+            let votes = self.calculate_votes(&voters, &vec![path.clone()]);
+            let vote = votes.get(&path).unwrap();
+            final_path.push((path.clone(), *vote));
+        }
+        self.statistics_from_votes(&final_path)
+    }
+
     pub fn calculate_best_path_greedy(&self, base_path: &QualifiedPath) -> MergeChainStatistic {
         let mut missing = self.all_keys.clone();
         let start = base_path.clone();
         missing.retain(|k| k != base_path);
         let mut final_path = vec![(start, 0)];
         while missing.len() > 0 {
-            let mut votes: HashMap<i32, Vec<QualifiedPath>> = HashMap::new();
-            for candidate in missing.iter() {
-                let mut vote = 0;
-                for (p, _) in final_path.iter() {
-                    vote += self.matrix[p].get(candidate).unwrap();
-                }
-                if votes.contains_key(&vote) {
-                    votes.get_mut(&vote).unwrap().push(candidate.clone());
-                } else {
-                    votes.insert(vote, vec![candidate.clone()]);
-                }
-            }
+            let voters = final_path.iter().map(|(k, _)| k.clone()).collect();
+            let votes = Self::reverse_votes(&self.calculate_votes(&voters, &missing));
             let max_vote = votes.keys().max().unwrap();
             let max_candidates = &votes[&max_vote];
             let winner = match max_candidates.len() {
@@ -385,21 +433,7 @@ impl Conflict2DMatrix {
             missing.remove(index);
             final_path.push((winner, max_vote.clone()));
         }
-        let mut chain_statistic = MergeChainStatistic::new();
-        for (path, vote) in final_path.into_iter() {
-            let statistic = match vote {
-                0 => {
-                    let success = MergeSuccess::new(path);
-                    MergeStatistic::Success(success)
-                }
-                _ => {
-                    let conflict = MergeConflict::new(path);
-                    MergeStatistic::Conflict(conflict)
-                }
-            };
-            chain_statistic.push(statistic);
-        }
-        chain_statistic
+        self.statistics_from_votes(&final_path)
     }
 
     fn calculate_forward_compatibility(
@@ -413,16 +447,66 @@ impl Conflict2DMatrix {
             .filter_map(|(k, v)| if missing.contains(k) { Some(*v) } else { None })
             .sum::<i32>()
     }
+
+    fn calculate_votes(
+        &self,
+        voters: &Vec<QualifiedPath>,
+        targets: &Vec<QualifiedPath>,
+    ) -> HashMap<QualifiedPath, i32> {
+        let mut votes: HashMap<QualifiedPath, i32> = HashMap::new();
+        for candidate in targets.iter() {
+            let mut vote = 0;
+            for p in voters.iter() {
+                vote += self.matrix[p].get(candidate).unwrap();
+            }
+            votes.insert(candidate.clone(), vote);
+        }
+        votes
+    }
+
+    fn reverse_votes(votes: &HashMap<QualifiedPath, i32>) -> HashMap<i32, Vec<QualifiedPath>> {
+        let mut reversed: HashMap<i32, Vec<QualifiedPath>> = HashMap::new();
+        for (path, vote) in votes.iter() {
+            if reversed.contains_key(vote) {
+                reversed.get_mut(vote).unwrap().push(path.clone());
+            } else {
+                reversed.insert(*vote, vec![path.clone()]);
+            }
+        }
+        reversed
+    }
+
+    fn statistics_from_votes(&self, votes: &Vec<(QualifiedPath, i32)>) -> MergeChainStatistic {
+        let mut chain_statistic = MergeChainStatistic::new();
+        for (index, (path, vote)) in votes.iter().enumerate() {
+            let statistic = if index == 0 {
+                MergeStatistic::Base(path.clone())
+            } else {
+                match vote {
+                    0 => {
+                        let success = MergeSuccess::new(path.clone());
+                        MergeStatistic::Success(success)
+                    }
+                    _ => {
+                        let conflict = MergeConflict::new(path.clone());
+                        MergeStatistic::Conflict(conflict)
+                    }
+                }
+            };
+            chain_statistic.push(statistic);
+        }
+        chain_statistic
+    }
 }
 
 pub struct ConflictAnalyzer<'a> {
     checker: ConflictChecker<'a>,
-    context: &'a CommandContext<'a>,
+    logger: &'a TanglLogger,
 }
 
 impl<'a> ConflictAnalyzer<'a> {
-    pub fn new(checker: ConflictChecker<'a>, context: &'a CommandContext<'a>) -> Self {
-        Self { checker, context }
+    pub fn new(checker: ConflictChecker<'a>, logger: &'a TanglLogger) -> Self {
+        Self { checker, logger }
     }
 
     pub fn calculate_2d_heuristics_matrix_with_merge_base(
@@ -436,10 +520,10 @@ impl<'a> ConflictAnalyzer<'a> {
             Conflict2DMatrix::initialize(&all.iter().map(|p| p.to_qualified_path()).collect());
 
         let mut conflicting_with_base: Vec<QualifiedPath> = vec![];
-        self.context.debug("Checking against base pairwise");
+        self.logger.debug("Checking against base pairwise");
         for s in self.checker.check_permutations_against_base(paths, base, 1) {
             let result = s?;
-            self.context.debug(result.display_as_path());
+            self.logger.debug(result.display_as_path());
             if result.contains_conflicts() {
                 conflicting_with_base.push(result.get_chain().get(1).unwrap().get_path().clone());
             }
@@ -455,17 +539,17 @@ impl<'a> ConflictAnalyzer<'a> {
             .cloned()
             .collect();
 
-        self.context.debug("Checking successful against base");
+        self.logger.debug("Checking successful against base");
         for with_base in self
             .checker
             .check_permutations_against_base(&to_test_with_base, &base, 2)
         {
             let mut result = with_base?;
-            self.context.debug(result.display_as_path());
+            self.logger.debug(result.display_as_path());
             result.remove(0);
             matrix.insert(&result);
         }
-        self.context.debug("Checking conflicting without base");
+        self.logger.debug("Checking conflicting without base");
         // TODO
         self.checker.clean_up();
         Ok(matrix)

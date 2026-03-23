@@ -32,36 +32,36 @@ impl CommandInterface for StatusCommand {
             current_path.get_actual_type().get_formatted_name(),
             current_path.to_string().blue()
         );
-        context.info(first_line);
+        context.logger.info(first_line);
 
         if let Some(product) = current_path.try_convert_to::<ConcreteProduct>() {
             let inspector = InspectionManager::new(&context.git);
             let state = inspector.get_current_derivation_state(&product)?;
             match state.get_state() {
-                DerivationState::None => context.info("No derivation in progress"),
+                DerivationState::None => context.logger.info("No derivation in progress"),
                 DerivationState::InProgress => {
-                    context.info("\nDerivation in progress");
+                    context.logger.info("\nDerivation in progress");
                     if !state.get_completed().is_empty() {
-                        context.info("\nFeatures merged:");
+                        context.logger.info("\nFeatures merged:");
                         for feature in state.get_completed() {
-                            context.info(format!(
+                            context.logger.info(format!(
                                 "    {}",
                                 feature.get_qualified_path().to_string().green()
                             ));
                         }
                     }
                     if !state.get_missing().is_empty() {
-                        context.info("\nFeatures remaining:");
+                        context.logger.info("\nFeatures remaining:");
                         for feature in state.get_missing() {
-                            context.info(format!(
+                            context.logger.info(format!(
                                 "    {}",
                                 feature.get_qualified_path().to_string().red()
                             ));
                         }
                     }
                     if no_first_line.contains("You have unmerged paths.") {
-                        context.info("\nCurrently merging:");
-                        context.info(format!(
+                        context.logger.info("\nCurrently merging:");
+                        context.logger.info(format!(
                             "    {}",
                             state
                                 .get_missing()
@@ -74,7 +74,8 @@ impl CommandInterface for StatusCommand {
                         no_first_line += format!(
                             "\nWhen all conflicts are fixed, run {} to continue the derivation.",
                             format_command_help("tangl derive --continue")
-                        ).as_str();
+                        )
+                        .as_str();
                     } else {
                         no_first_line += format!(
                             "\nRun {} to continue the derivation.",
@@ -82,12 +83,12 @@ impl CommandInterface for StatusCommand {
                         )
                         .as_str();
                     }
-                    context.info("");
+                    context.logger.info("");
                 }
             }
         };
 
-        context.info(no_first_line);
+        context.logger.info(no_first_line);
         Ok(())
     }
 }
