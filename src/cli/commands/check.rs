@@ -242,7 +242,7 @@ impl CommandInterface for CheckCommand {
                     let filtered = filter.transform(relevant_paths);
                     completion_helper.complete_qualified_paths(
                         context.git.get_current_qualified_path()?,
-                        filtered.map(|path| path.to_qualified_path()),
+                        filtered.map(|path| path.to_normalized_path()),
                     )
                 }
                 _ => {

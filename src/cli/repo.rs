@@ -73,7 +73,7 @@ impl CommandRepository {
         }
     }
     pub fn execute(&self, arg_source: ArgSource) -> Result<(), Box<dyn Error>> {
-        let context = self.build_context(arg_source, ImportFormat::Native);
+        let context = self.build_context(arg_source, ImportFormat::Waffle);
         self.execute_recursive(context)?;
         Ok(())
     }

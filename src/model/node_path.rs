@@ -59,10 +59,10 @@ impl NodePath<VirtualRoot> {
 
 impl NodePath<ConcreteArea> {
     pub fn get_path_to_feature_root(&self) -> NormalizedPath {
-        self.to_qualified_path() + NormalizedPath::from(FEATURES_PREFIX)
+        self.to_normalized_path() + NormalizedPath::from(FEATURES_PREFIX)
     }
     pub fn get_path_to_product_root(&self) -> NormalizedPath {
-        self.to_qualified_path() + NormalizedPath::from(PRODUCTS_PREFIX)
+        self.to_normalized_path() + NormalizedPath::from(PRODUCTS_PREFIX)
     }
     pub fn move_to_feature_root(self) -> Option<NodePath<FeatureRoot>> {
         if self.unknown_mode {
@@ -89,7 +89,7 @@ impl NodePath<ConcreteArea> {
 }
 
 impl<T: SymbolicNodeType> ToNormalizedPath for NodePath<T> {
-    fn to_qualified_path(&self) -> NormalizedPath {
+    fn to_normalized_path(&self) -> NormalizedPath {
         let mut path = NormalizedPath::new();
         for p in self.path.iter() {
             path.push(p.get_name());
@@ -142,7 +142,7 @@ impl<T: SymbolicNodeType> NodePath<T> {
     pub fn iter_children(&self) -> impl Iterator<Item = NodePath<AnyNode>> {
         self.get_node()
             .iter_children()
-            .map(|(name, _)| self.clone().move_to(&name.to_qualified_path()).unwrap())
+            .map(|(name, _)| self.clone().move_to(&name.to_normalized_path()).unwrap())
             .sorted()
     }
     pub fn iter_children_req(&self) -> impl Iterator<Item = NodePath<AnyNode>> {
@@ -182,7 +182,7 @@ where
     B: SymbolicNodeType,
 {
     fn eq(&self, other: &NodePath<A>) -> bool {
-        self.to_qualified_path() == other.to_qualified_path()
+        self.to_normalized_path() == other.to_normalized_path()
     }
 }
 
@@ -190,17 +190,17 @@ impl<T: SymbolicNodeType> Eq for NodePath<T> {}
 
 impl<T: SymbolicNodeType> Display for NodePath<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.to_qualified_path().to_string().as_str())
+        f.write_str(self.to_normalized_path().to_string().as_str())
     }
 }
 
 impl<T: SymbolicNodeType> PartialOrd for NodePath<T> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        if self.to_qualified_path() == other.to_qualified_path() {
+        if self.to_normalized_path() == other.to_normalized_path() {
             Some(Ordering::Equal)
-        } else if self.to_qualified_path() > other.to_qualified_path() {
+        } else if self.to_normalized_path() > other.to_normalized_path() {
             Some(Ordering::Greater)
-        } else if self.to_qualified_path() < other.to_qualified_path() {
+        } else if self.to_normalized_path() < other.to_normalized_path() {
             Some(Ordering::Less)
         } else {
             None

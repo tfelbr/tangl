@@ -4,6 +4,8 @@ use crate::model::ImportFormat;
 use clap::{Arg, Command};
 use std::error::Error;
 
+const IMPORT_FORMAT: &str = "import_format";
+
 #[derive(Clone, Debug)]
 pub struct TangleCommand {}
 
@@ -13,10 +15,10 @@ impl CommandDefinition for TangleCommand {
             .arg_required_else_help(true)
             .allow_external_subcommands(true)
             .arg(
-                Arg::new("format")
+                Arg::new(IMPORT_FORMAT)
                     .short('f')
                     .long("import-format")
-                    .default_value("native")
+                    .default_value("waffle")
                     .help("Specify file import format for all commands"),
             )
     }
@@ -43,7 +45,7 @@ impl CommandInterface for TangleCommand {
     fn run_command(&self, context: &mut CommandContext) -> Result<(), Box<dyn Error>> {
         let format = context
             .arg_helper
-            .get_argument_value::<String>("format")
+            .get_argument_value::<String>(IMPORT_FORMAT)
             .unwrap();
         context.import_format = ImportFormat::from(format);
         Ok(())
@@ -57,7 +59,6 @@ impl CommandInterface for TangleCommand {
         match completion_helper.currently_editing() {
             Some(value) => match value.get_id().as_str() {
                 "format" => Ok(vec![
-                    "native".to_string(),
                     "waffle".to_string(),
                     "uvl".to_string(),
                 ]),

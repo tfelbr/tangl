@@ -315,7 +315,7 @@ impl<'a> DerivationManager<'a> {
                 missing_feature = Some(feature);
                 break;
             } else {
-                new_state.mark_as_completed(&feature.to_qualified_path());
+                new_state.mark_as_completed(&feature.to_normalized_path());
             }
         }
         if missing_feature.is_none() {
@@ -335,7 +335,7 @@ impl<'a> DerivationManager<'a> {
             let mut chain: MergeChainStatistic = self
                 .current_state
                 .get_missing()
-                .to_merge_chain_statistic(self.product.to_qualified_path());
+                .to_merge_chain_statistic(self.product.to_normalized_path());
             if self.git.pending_merge()? {
                 let second = chain.remove(1);
                 let merging = MergeStatistic::Merging(MergePending::new(second.get_path().clone()));
@@ -361,14 +361,13 @@ impl<'a> DerivationManager<'a> {
             &self.product.try_convert_to().unwrap(),
         )?;
         let new_order = if optimize_order {
-            matrix.calculate_best_path_greedy(&self.product.to_qualified_path())
+            matrix.calculate_best_path_greedy(&self.product.to_normalized_path())
         } else {
-            let mut with_base = vec![self.product.to_qualified_path()];
-            let paths: Vec<NormalizedPath> = order.iter().map(|p| p.to_qualified_path()).collect();
+            let mut with_base = vec![self.product.to_normalized_path()];
+            let paths: Vec<NormalizedPath> = order.iter().map(|p| p.to_normalized_path()).collect();
             with_base.extend(paths);
             matrix.predict_conflicts(&with_base)
         };
-        println!("{}", new_order.display_as_path());
         Ok(new_order)
     }
 
@@ -423,7 +422,7 @@ impl<'a> DerivationManager<'a> {
         let old_order: MergeChainStatistic = self
             .current_state
             .get_missing()
-            .to_merge_chain_statistic(self.product.to_qualified_path());
+            .to_merge_chain_statistic(self.product.to_normalized_path());
         let missing: Vec<NormalizedPath> = self.current_state.get_missing().to_normalized_paths();
         let features = self.git.get_model().assert_all(&missing)?;
         let new_order = self.predict_conflicts(&features, true)?;

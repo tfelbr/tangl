@@ -45,7 +45,7 @@ impl CommandInterface for CheckoutCommand {
         };
         let current = context.git.get_current_qualified_path()?;
         let out = context.git.checkout(&node_path)?;
-        if current == node_path.to_qualified_path() {
+        if current == node_path.to_normalized_path() {
             context.logger.info(format!(
                 "Already on branch {}",
                 node_path.to_string().blue(),

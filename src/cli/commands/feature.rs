@@ -10,7 +10,7 @@ fn add_feature(
 ) -> Result<(), Box<dyn Error>> {
     let node_path = context.git.assert_current_node_path::<AnyHasBranch>()?;
     let current_path = if let Some(path) = node_path.try_convert_to::<ConcreteFeature>() {
-        path.to_qualified_path()
+        path.to_normalized_path()
     } else if let Some(path) = node_path.as_any_type().try_convert_to::<ConcreteArea>() {
         path.get_path_to_feature_root()
     } else {
@@ -24,7 +24,7 @@ fn add_feature(
     context.logger.info(format!(
         "Created new {} {}",
         NodeType::ConcreteFeature.get_formatted_name(),
-        result.to_qualified_path().strip_n_left(3),
+        result.to_normalized_path().strip_n_left(3),
     ));
     Ok(())
 }
@@ -63,10 +63,10 @@ impl CommandInterface for FeatureCommand {
             Some(delete) => {
                 let current = context.git.assert_current_node_path::<AnyHasBranch>()?;
                 let to_delete = if let Some(feature) = current.try_convert_to::<ConcreteFeature>() {
-                    feature.to_qualified_path() + delete.to_qualified_path()
+                    feature.to_normalized_path() + delete.to_normalized_path()
                 } else {
                     context.git.get_current_area()?.get_path_to_feature_root()
-                        + delete.to_qualified_path()
+                        + delete.to_normalized_path()
                 };
                 delete_path::<ConcreteFeature>(&to_delete, context)?;
                 return Ok(());
@@ -99,15 +99,15 @@ impl CommandInterface for FeatureCommand {
                     let current = context.git.assert_current_node_path::<AnyHasBranch>()?;
                     let reference =
                         if let Some(feature) = current.try_convert_to::<ConcreteFeature>() {
-                            feature.to_qualified_path()
+                            feature.to_normalized_path()
                         } else {
-                            feature_root.to_qualified_path()
+                            feature_root.to_normalized_path()
                         };
                     completion_helper.complete_qualified_paths(
                         reference,
                         HasBranchFilteringNodePathTransformer::new(true)
                             .transform(feature_root.iter_children_req())
-                            .map(|path| path.to_qualified_path()),
+                            .map(|path| path.to_normalized_path()),
                     )
                 }
                 _ => {

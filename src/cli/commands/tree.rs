@@ -37,7 +37,7 @@ impl CommandInterface for LSCommand {
                 .arg_helper
                 .get_argument_value::<String>(TARGET)
                 .unwrap()
-                .to_qualified_path();
+                .to_normalized_path();
         if target.is_dir() {
             target = target.strip_n_right(target.len() - 1)
         }
@@ -54,7 +54,7 @@ impl CommandInterface for LSCommand {
             }
             false => {
                 for child in node_path.iter_children().sorted() {
-                    let mut name = child.to_qualified_path().last().unwrap().clone();
+                    let mut name = child.to_normalized_path().last().unwrap().clone();
                     if child.get_metadata().has_branch() {
                         name = name.blue().to_string()
                     }
@@ -81,7 +81,7 @@ impl CommandInterface for LSCommand {
                     let root = context.git.get_model().get_virtual_root();
                     completion_helper.complete_qualified_paths(
                         current,
-                        root.iter_children_req().map(|p| p.to_qualified_path()),
+                        root.iter_children_req().map(|p| p.to_normalized_path()),
                     )
                 }
                 _ => vec![],

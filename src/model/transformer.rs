@@ -53,14 +53,14 @@ impl<A: SymbolicNodeType> NodePathTransformer<A, A> for ByQPathFilteringNodePath
         let path = node_path?;
         match self.mode {
             FilteringMode::INCLUDE => {
-                if self.paths.contains(&path.to_qualified_path()) {
+                if self.paths.contains(&path.to_normalized_path()) {
                     Some(path)
                 } else {
                     None
                 }
             }
             FilteringMode::EXCLUDE => {
-                if self.paths.contains(&path.to_qualified_path()) {
+                if self.paths.contains(&path.to_normalized_path()) {
                     None
                 } else {
                     Some(path)
@@ -207,7 +207,7 @@ mod tests {
         let root = model.get_virtual_root();
         let actual = transformer
             .transform(root.iter_children_req())
-            .map(|node_path| node_path.to_qualified_path())
+            .map(|node_path| node_path.to_normalized_path())
             .collect::<Vec<_>>();
         assert_eq!(actual, vec!["/main/feature/root"]);
     }
@@ -222,7 +222,7 @@ mod tests {
         let root = model.get_virtual_root();
         let actual = transformer
             .transform(root.iter_children_req())
-            .map(|node_path| node_path.to_qualified_path())
+            .map(|node_path| node_path.to_normalized_path())
             .collect::<Vec<_>>();
         assert_eq!(
             actual,

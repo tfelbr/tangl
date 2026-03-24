@@ -83,7 +83,7 @@ impl<'a> InspectionManager<'a> {
                 if let Some(concrete) = product.try_convert_to::<ConcreteProduct>() {
                     let state = self.get_last_derivation_state(&concrete)?;
                     let features: Vec<NormalizedPath> = state.get_total().to_normalized_paths();
-                    if features.contains(&feature.to_qualified_path()) {
+                    if features.contains(&feature.to_normalized_path()) {
                         products.push(concrete);
                     }
                 }

@@ -12,7 +12,7 @@ fn add_product(
 ) -> Result<(), Box<dyn Error>> {
     let node_path = context.git.assert_current_node_path::<AnyHasBranch>()?;
     let current_path = if let Some(path) = node_path.try_convert_to::<ConcreteProduct>() {
-        path.to_qualified_path()
+        path.to_normalized_path()
     } else if let Some(path) = node_path.as_any_type().try_convert_to::<ConcreteArea>() {
         path.get_path_to_product_root()
     } else {
@@ -26,7 +26,7 @@ fn add_product(
     context.logger.info(format!(
         "Created new {} {}",
         NodeType::ConcreteProduct.get_formatted_name(),
-        result.to_qualified_path().strip_n_left(3),
+        result.to_normalized_path().strip_n_left(3),
     ));
     Ok(())
 }
@@ -65,14 +65,14 @@ impl CommandInterface for ProductCommand {
         if let Some(delete) = maybe_delete {
             let current = context.git.assert_current_node_path::<AnyHasBranch>()?;
             let to_delete = if let Some(product) = current.try_convert_to::<ConcreteProduct>() {
-                product.to_qualified_path() + delete.to_qualified_path()
+                product.to_normalized_path() + delete.to_normalized_path()
             } else {
                 context.git.get_current_area()?.get_path_to_product_root()
-                    + delete.to_qualified_path()
+                    + delete.to_normalized_path()
             };
             delete_path::<ConcreteProduct>(&to_delete, context)?;
         } else if maybe_product.is_some() {
-            add_product(maybe_product.unwrap().to_qualified_path(), context)?;
+            add_product(maybe_product.unwrap().to_normalized_path(), context)?;
         } else {
             print_product_tree(context)?;
         }
@@ -89,10 +89,10 @@ impl CommandInterface for ProductCommand {
                     let maybe_feature_root = context.git.get_current_area()?.move_to_product_root();
                     match maybe_feature_root {
                         Some(path) => completion_helper.complete_qualified_paths(
-                            path.to_qualified_path(),
+                            path.to_normalized_path(),
                             HasBranchFilteringNodePathTransformer::new(true)
                                 .transform(path.iter_children_req())
-                                .map(|path| path.to_qualified_path()),
+                                .map(|path| path.to_normalized_path()),
                         ),
                         None => {
                             vec![]

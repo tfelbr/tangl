@@ -343,7 +343,7 @@ impl<'a> ConflictChecker<'a> {
             .assert_current_node_path::<AnyHasBranch>()
             .unwrap();
         let base = chain[0];
-        chain_statistic.push(MergeStatistic::Base(base.to_qualified_path()));
+        chain_statistic.push(MergeStatistic::Base(base.to_normalized_path()));
         self.interface.checkout(base)?;
         let temporary = NormalizedPath::from("tmp");
         self.interface.create_branch_no_mut(&temporary)?;
@@ -351,7 +351,7 @@ impl<'a> ConflictChecker<'a> {
         let mut skip = false;
         for path in chain[1..].iter() {
             if skip {
-                chain_statistic.push(MergeStatistic::Aborted(path.to_qualified_path()));
+                chain_statistic.push(MergeStatistic::Aborted(path.to_normalized_path()));
             } else {
                 let (statistic, _) = self.interface.merge(path)?;
                 if statistic.contains_conflicts() {
@@ -549,7 +549,7 @@ impl<'a> ConflictAnalyzer<'a> {
         let mut all = vec![base];
         all.extend(paths);
         let mut matrix =
-            Conflict2DMatrix::initialize(&all.iter().map(|p| p.to_qualified_path()).collect());
+            Conflict2DMatrix::initialize(&all.iter().map(|p| p.to_normalized_path()).collect());
 
         let mut conflicting_with_base: Vec<NormalizedPath> = vec![];
         self.logger.debug("Checking against base pairwise");
@@ -562,12 +562,12 @@ impl<'a> ConflictAnalyzer<'a> {
         }
         let to_test_with_base: Vec<NodePath<AnyHasBranch>> = paths
             .iter()
-            .filter(|path| !conflicting_with_base.contains(&path.to_qualified_path()))
+            .filter(|path| !conflicting_with_base.contains(&path.to_normalized_path()))
             .cloned()
             .collect();
         let _to_test_without_base: Vec<NodePath<AnyHasBranch>> = paths
             .iter()
-            .filter(|path| conflicting_with_base.contains(&path.to_qualified_path()))
+            .filter(|path| conflicting_with_base.contains(&path.to_normalized_path()))
             .cloned()
             .collect();
 

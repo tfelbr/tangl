@@ -204,7 +204,7 @@ impl GitInterface {
     }
 
     pub fn checkout<T: HasBranch>(&self, path: &NodePath<T>) -> Result<String, GitError> {
-        self.checkout_raw(&path.to_qualified_path())
+        self.checkout_raw(&path.to_normalized_path())
     }
 
     pub(super) fn create_branch_no_mut(&self, path: &NormalizedPath) -> Result<String, GitError> {
@@ -241,27 +241,27 @@ impl GitInterface {
     }
 
     pub fn delete_branch<T: HasBranch>(&mut self, path: NodePath<T>) -> Result<String, GitError> {
-        self.delete_branch_no_mut(&path.to_qualified_path())
+        self.delete_branch_no_mut(&path.to_normalized_path())
     }
 
     pub fn merge<T: HasBranch>(
         &self,
         path: &NodePath<T>,
     ) -> Result<(MergeChainStatistic, String), GitError> {
-        let branch = path.to_qualified_path().to_git_branch();
+        let branch = path.to_normalized_path().to_git_branch();
         let command = vec!["merge", branch.as_str()];
         let out = self.raw_git_interface.run(&command)?;
         let result = if out.status.success() {
             let response = String::from_utf8(out.stdout).unwrap();
             let status = if response.contains("Already up to date.") {
-                MergeStatistic::UpToDate(path.to_qualified_path())
+                MergeStatistic::UpToDate(path.to_normalized_path())
             } else {
-                MergeStatistic::Success(MergeSuccess::new(path.to_qualified_path()))
+                MergeStatistic::Success(MergeSuccess::new(path.to_normalized_path()))
             };
             (status, response)
         } else {
             let response = String::from_utf8(out.stderr).unwrap();
-            let conflict = MergeConflict::new(path.to_qualified_path());
+            let conflict = MergeConflict::new(path.to_normalized_path());
             (MergeStatistic::Conflict(conflict), response)
         };
         let current = self.get_current_qualified_path()?;
@@ -313,7 +313,7 @@ impl GitInterface {
         n: i32,
     ) -> Result<CommitIterator, GitError> {
         let n_str = n.to_string();
-        let branch = branch.to_qualified_path().to_git_branch();
+        let branch = branch.to_normalized_path().to_git_branch();
         let command = vec!["log", "-n", n_str.as_str(), "--format=%H", branch.as_str()];
         let out = self.raw_git_interface.run(&command)?;
         let raw_hashes = output_to_result(out, &command)?.trim().to_string();
@@ -337,7 +337,7 @@ impl GitInterface {
         &self,
         branch: &NodePath<T>,
     ) -> Result<Vec<String>, GitError> {
-        let branch = branch.to_qualified_path().to_git_branch();
+        let branch = branch.to_normalized_path().to_git_branch();
         let command = vec!["ls-tree", "-r", "--name-only", branch.as_str()];
         let out = self.raw_git_interface.run(&command)?;
         let message = output_to_result(out, &command)?;

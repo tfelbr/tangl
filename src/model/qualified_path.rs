@@ -133,7 +133,7 @@ impl NormalizedPath {
     pub fn push<S: Into<String>>(&mut self, path: S) {
         let qualified_str = path.into().replace("_", "");
         for split in qualified_str.trim().split(SEPARATOR) {
-            self.path.push(split.to_string());
+            self.path.push(split.to_lowercase());
         }
     }
     pub fn strip_n(&self, n_left: usize, n_right: usize) -> NormalizedPath {
@@ -216,7 +216,7 @@ impl NormalizedPath {
 }
 
 pub trait ToNormalizedPath {
-    fn to_qualified_path(&self) -> NormalizedPath;
+    fn to_normalized_path(&self) -> NormalizedPath;
 }
 
 pub trait ToNormalizedPaths {
@@ -224,7 +224,7 @@ pub trait ToNormalizedPaths {
 }
 
 impl ToNormalizedPath for String {
-    fn to_qualified_path(&self) -> NormalizedPath {
+    fn to_normalized_path(&self) -> NormalizedPath {
         NormalizedPath::from(self.clone())
     }
 }

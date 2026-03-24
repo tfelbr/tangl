@@ -6,6 +6,8 @@ use crate::model::*;
 use crate::spl::*;
 use clap::{Arg, ArgAction, Command};
 use std::error::Error;
+use std::fs::File;
+use std::io::Read;
 
 const FEATURES: &str = "features";
 const CONTINUE: &str = "continue";
@@ -13,6 +15,7 @@ const ABORT: &str = "abort";
 const RESET: &str = "reset";
 const OPTIMIZE: &str = "optimize";
 const UPDATE: &str = "update";
+const FROM_FILE: &str = "from_file";
 
 pub fn fix_conflicts_hint() -> String {
     format!(
@@ -111,7 +114,7 @@ fn handle_continue(
         })
         .collect();
     let completed_chain = completed
-        .to_merge_chain_statistic(derivation_manager.get_product().to_qualified_path());
+        .to_merge_chain_statistic(derivation_manager.get_product().to_normalized_path());
     let still_missing: MergeChainStatistic = derivation_manager.get_pending_chain()?;
     logger.info(format!("Merged {} feature(s)", completed_chain.len() - 1));
     for complete in completed_chain.iter_except_base() {
@@ -180,9 +183,14 @@ impl CommandDefinition for DeriveCommand {
                 Arg::new(UPDATE)
                     .short('u')
                     .long(UPDATE)
-                    .conflicts_with_all(vec![FEATURES])
+                    .conflicts_with_all(vec![FEATURES, FROM_FILE])
                     .action(ArgAction::SetTrue)
                     .help("Updates product with newest commits of contained features"),
+                Arg::new(FROM_FILE)
+                    .short('f')
+                    .long("from-file")
+                    .conflicts_with_all(vec![FEATURES, UPDATE])
+                    .help("Get features from external product configuration"),
             ])
             .arg(verbose())
     }
@@ -216,6 +224,9 @@ impl CommandInterface for DeriveCommand {
             .arg_helper
             .get_argument_value::<bool>(UPDATE)
             .unwrap();
+        let file_path = context
+            .arg_helper
+            .get_argument_value::<String>(FROM_FILE);
 
         let features = context.git.get_model().assert_all(&all_feature_paths)?;
         let mut derivation_manager =
@@ -238,6 +249,21 @@ impl CommandInterface for DeriveCommand {
             handle_continue(&mut derivation_manager, &context.logger)?;
         } else if update {
             handle_update(optimize, &mut derivation_manager, &context.logger)?;
+        } else if let Some(file_path) = file_path {
+            let feature_root = context.git.get_current_area()?.get_path_to_feature_root();
+            let mut file = File::open(file_path)?;
+            let mut content = String::new();
+            file.read_to_string(&mut content)?;
+            let parser = ModelParser::new(&context.import_format);
+            let paths = parser
+                .import(&content)?
+                .into_iter()
+                .map(|p| feature_root.clone() + p)
+                .collect();
+            let features = context.git.get_model().assert_all::<Feature>(&paths)?;
+            let transformer = ByTypeFilteringNodePathTransformer::<_, ConcreteFeature>::new();
+            let node_paths = transformer.transform(features.into_iter()).collect();
+            handle_initialize(node_paths, optimize, &mut derivation_manager, &context.logger)?;
         } else {
             unreachable!()
         };
@@ -254,7 +280,7 @@ impl CommandInterface for DeriveCommand {
             return Ok(vec![]);
         }
         let feature_root = maybe_feature_root.unwrap();
-        let feature_root_path = feature_root.to_qualified_path();
+        let feature_root_path = feature_root.to_normalized_path();
         let current = completion_helper.currently_editing();
         let result = match current {
             Some(value) => match value.get_id().as_str() {
@@ -269,10 +295,10 @@ impl CommandInterface for DeriveCommand {
                         FilteringMode::EXCLUDE,
                     )?;
                     completion_helper.complete_qualified_paths(
-                        feature_root.to_qualified_path(),
+                        feature_root.to_normalized_path(),
                         transformer
                             .transform(feature_root.iter_children_req())
-                            .map(|path| path.to_qualified_path()),
+                            .map(|path| path.to_normalized_path()),
                     )
                 }
                 _ => vec![],

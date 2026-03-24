@@ -54,7 +54,7 @@ impl IsOnOrUnderArea for AbstractFeature {}
 pub struct Feature;
 impl SymbolicNodeType for Feature {
     fn identifier() -> String {
-        NodeType::AbstractFeature.get_type_name()
+        "generic feature".to_string()
     }
 
     fn is_compatible_to_node_type(node_type: &NodeType) -> bool {
@@ -106,7 +106,7 @@ impl IsOnOrUnderArea for ConcreteProduct {}
 pub struct AbstractProduct;
 impl SymbolicNodeType for AbstractProduct {
     fn identifier() -> String {
-        NodeType::ConcreteProduct.get_type_name()
+        NodeType::AbstractProduct.get_type_name()
     }
 
     fn is_compatible_to_node_type(node_type: &NodeType) -> bool {
@@ -123,7 +123,7 @@ impl IsOnOrUnderArea for AbstractProduct {}
 pub struct Product;
 impl SymbolicNodeType for Product {
     fn identifier() -> String {
-        NodeType::ConcreteProduct.get_type_name()
+        "generic product".to_string()
     }
 
     fn is_compatible_to_node_type(node_type: &NodeType) -> bool {

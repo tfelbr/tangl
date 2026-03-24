@@ -100,6 +100,6 @@ mod tests {
         let path = tree
             .get_node_path::<AnyNode>(&NormalizedPath::from("/main"))
             .unwrap();
-        assert_eq!(path.to_qualified_path(), "/main")
+        assert_eq!(path.to_normalized_path(), "/main")
     }
 }
