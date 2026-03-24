@@ -1,6 +1,6 @@
 use crate::cli::completion::CompletionHelper;
 use crate::cli::*;
-use crate::model::{AnyNode, ToQualifiedPath};
+use crate::model::{AnyNode, ToNormalizedPath};
 use clap::{Arg, ArgAction, Command};
 use colored::Colorize;
 use itertools::Itertools;

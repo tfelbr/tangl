@@ -1,6 +1,6 @@
 use crate::cli::completion::*;
 use crate::cli::*;
-use crate::model::{AnyHasBranch, ModelError, QualifiedPath, ToQualifiedPath};
+use crate::model::{AnyHasBranch, ModelError, NormalizedPath, ToNormalizedPath};
 use clap::{Arg, Command};
 use colored::Colorize;
 use std::error::Error;
@@ -21,7 +21,7 @@ impl CommandInterface for CheckoutCommand {
             .arg_helper
             .get_argument_value::<String>("branch")
             .unwrap();
-        let full_target = context.git.get_current_qualified_path()? + QualifiedPath::from(branch);
+        let full_target = context.git.get_current_qualified_path()? + NormalizedPath::from(branch);
         let node_path = match context
             .git
             .get_model()
@@ -57,7 +57,8 @@ impl CommandInterface for CheckoutCommand {
                 node_path.to_string().blue(),
             ));
         }
-        let rest = out.split("\n")
+        let rest = out
+            .split("\n")
             .filter(|s| !s.contains("Switched") && !s.contains("Already"))
             .collect::<Vec<&str>>()
             .join("\n")

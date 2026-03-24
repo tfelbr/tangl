@@ -1,4 +1,3 @@
-use crate::git::conflict::MergeChainStatistic;
 use crate::git::error::GitError;
 use crate::git::interface::GitInterface;
 use crate::model::*;
@@ -83,8 +82,7 @@ impl<'a> InspectionManager<'a> {
             for product in product_root.iter_products_req() {
                 if let Some(concrete) = product.try_convert_to::<ConcreteProduct>() {
                     let state = self.get_last_derivation_state(&concrete)?;
-                    let total: &MergeChainStatistic = &state.get_total().into();
-                    let features: Vec<QualifiedPath> = total.into();
+                    let features: Vec<NormalizedPath> = state.get_total().to_normalized_paths();
                     if features.contains(&feature.to_qualified_path()) {
                         products.push(concrete);
                     }

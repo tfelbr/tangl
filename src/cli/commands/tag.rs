@@ -1,5 +1,5 @@
 use crate::cli::*;
-use crate::model::{AnyHasBranch, QualifiedPath};
+use crate::model::{AnyHasBranch, NormalizedPath};
 use clap::{Arg, Command};
 use std::error::Error;
 

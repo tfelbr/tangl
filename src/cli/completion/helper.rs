@@ -1,6 +1,6 @@
 use crate::cli::ArgHelper;
 use crate::cli::completion::RelativePathCompleter;
-use crate::model::QualifiedPath;
+use crate::model::NormalizedPath;
 use clap::parser::ValueSource;
 use clap::{Arg, ArgAction, ArgMatches, Command};
 use std::ops::Range;
@@ -136,15 +136,15 @@ impl<'a> CompletionHelper<'a> {
     }
     pub fn complete_qualified_paths(
         &self,
-        reference: QualifiedPath,
-        paths: impl Iterator<Item = QualifiedPath>,
+        reference: NormalizedPath,
+        paths: impl Iterator<Item = NormalizedPath>,
     ) -> Vec<String> {
         let maybe_last = self.get_last();
         if maybe_last.is_none() {
             return vec![];
         }
         RelativePathCompleter::new(reference)
-            .complete(QualifiedPath::from(maybe_last.unwrap()), paths)
+            .complete(NormalizedPath::from(maybe_last.unwrap()), paths)
     }
 }
 

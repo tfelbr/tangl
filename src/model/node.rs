@@ -152,7 +152,7 @@ impl Node {
     }
     pub fn insert_node_path(
         &mut self,
-        path: &QualifiedPath,
+        path: &NormalizedPath,
         metadata: NodeMetadata,
         is_tag: bool,
     ) -> NodeType {
@@ -178,20 +178,20 @@ impl Node {
             }
         }
     }
-    pub fn as_qualified_path(&self) -> QualifiedPath {
-        QualifiedPath::from(self.name.clone())
+    pub fn as_qualified_path(&self) -> NormalizedPath {
+        NormalizedPath::from(self.name.clone())
     }
     pub fn get_qualified_paths_by<T, P>(
         &self,
-        initial_path: &QualifiedPath,
+        initial_path: &NormalizedPath,
         predicate: &P,
         categories: &Vec<T>,
-    ) -> HashMap<T, Vec<QualifiedPath>>
+    ) -> HashMap<T, Vec<NormalizedPath>>
     where
         P: Fn(&T, &Node) -> bool,
         T: Hash + Eq + Clone + Debug,
     {
-        let mut result: HashMap<T, Vec<QualifiedPath>> = HashMap::new();
+        let mut result: HashMap<T, Vec<NormalizedPath>> = HashMap::new();
         for child in self.children.values() {
             let path = initial_path.clone() + child.as_qualified_path();
             for t in categories {
@@ -225,12 +225,12 @@ mod tests {
     fn prepare_node() -> Node {
         let mut node = Node::new("root", NodeType::ConcreteFeature, NodeMetadata::default());
         node.insert_node_path(
-            &QualifiedPath::from("foo/f1"),
+            &NormalizedPath::from("foo/f1"),
             NodeMetadata::default(),
             false,
         );
         node.insert_node_path(
-            &QualifiedPath::from("bar/b1"),
+            &NormalizedPath::from("bar/b1"),
             NodeMetadata::default(),
             false,
         );
@@ -242,13 +242,13 @@ mod tests {
         let predicate = |_: &i32, node: &Node| -> bool { !node.get_metadata().has_branch };
         let node = prepare_node();
         let result = node
-            .get_qualified_paths_by(&QualifiedPath::new(), &predicate, &vec![0])
+            .get_qualified_paths_by(&NormalizedPath::new(), &predicate, &vec![0])
             .get(&0)
             .unwrap()
             .clone();
-        assert!(result.contains(&QualifiedPath::from("foo")));
-        assert!(result.contains(&QualifiedPath::from("bar")));
-        assert!(result.contains(&QualifiedPath::from("foo/f1")));
-        assert!(result.contains(&QualifiedPath::from("bar/b1")));
+        assert!(result.contains(&NormalizedPath::from("foo")));
+        assert!(result.contains(&NormalizedPath::from("bar")));
+        assert!(result.contains(&NormalizedPath::from("foo/f1")));
+        assert!(result.contains(&NormalizedPath::from("bar/b1")));
     }
 }

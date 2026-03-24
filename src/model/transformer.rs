@@ -40,11 +40,11 @@ pub enum FilteringMode {
     EXCLUDE,
 }
 pub struct ByQPathFilteringNodePathTransformer {
-    paths: Vec<QualifiedPath>,
+    paths: Vec<NormalizedPath>,
     mode: FilteringMode,
 }
 impl ByQPathFilteringNodePathTransformer {
-    pub fn new(paths: Vec<QualifiedPath>, mode: FilteringMode) -> Self {
+    pub fn new(paths: Vec<NormalizedPath>, mode: FilteringMode) -> Self {
         Self { paths, mode }
     }
 }
@@ -76,7 +76,7 @@ pub struct ByGlobFilteringNodePathTransformer {
 }
 impl ByGlobFilteringNodePathTransformer {
     pub fn new(
-        globs: &Vec<QualifiedPath>,
+        globs: &Vec<NormalizedPath>,
         filtering_mode: FilteringMode,
     ) -> Result<Self, globset::Error> {
         let mut built = Vec::new();
@@ -166,7 +166,7 @@ where
     In: SymbolicNodeType,
     Out: SymbolicNodeType,
 {
-    pub fn new(globs: &Vec<QualifiedPath>, mode: FilteringMode) -> Result<Self, globset::Error> {
+    pub fn new(globs: &Vec<NormalizedPath>, mode: FilteringMode) -> Result<Self, globset::Error> {
         let glob_filter = ByGlobFilteringNodePathTransformer::new(globs, mode)?;
         let type_filter = ByTypeFilteringNodePathTransformer::new();
         Ok(Self {
@@ -192,8 +192,8 @@ mod tests {
 
     fn prepare_model() -> TreeDataModel {
         let mut model = TreeDataModel::new();
-        model.insert_qualified_path(QualifiedPath::from("/main/feature/root"), false);
-        model.insert_qualified_path(QualifiedPath::from("/main/feature/root/foo"), false);
+        model.insert_qualified_path(NormalizedPath::from("/main/feature/root"), false);
+        model.insert_qualified_path(NormalizedPath::from("/main/feature/root/foo"), false);
         model
     }
 
@@ -201,7 +201,7 @@ mod tests {
     fn test_q_path_filtering_node_path_transformer_include() {
         let model = prepare_model();
         let transformer = ByQPathFilteringNodePathTransformer::new(
-            vec![QualifiedPath::from("/main/feature/root")],
+            vec![NormalizedPath::from("/main/feature/root")],
             FilteringMode::INCLUDE,
         );
         let root = model.get_virtual_root();
@@ -216,7 +216,7 @@ mod tests {
     fn test_q_path_filtering_node_path_transformer_exclude() {
         let model = prepare_model();
         let transformer = ByQPathFilteringNodePathTransformer::new(
-            vec![QualifiedPath::from("/main/feature/root")],
+            vec![NormalizedPath::from("/main/feature/root")],
             FilteringMode::EXCLUDE,
         );
         let root = model.get_virtual_root();

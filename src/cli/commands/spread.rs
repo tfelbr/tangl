@@ -30,7 +30,8 @@ impl CommandInterface for SpreadCommand {
                         Fix all conflicts, then rerun the spread command from {}",
                     child.to_string().blue(),
                     current.to_string().blue(),
-                ).into())
+                )
+                .into());
             }
         }
         context.git.checkout(&current)?;

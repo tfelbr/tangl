@@ -1,5 +1,5 @@
 use crate::git::error::{GitCommandError, GitError, GitModelError, GitSerdeError};
-use crate::model::{PathNotFoundError, WrongNodeTypeError};
+use crate::model::{ModelError, PathNotFoundError, WrongNodeTypeError};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::io;
@@ -40,7 +40,6 @@ impl Display for InitializeDerivationError {
         }
     }
 }
-
 impl Error for InitializeDerivationError {}
 
 #[derive(Debug)]
@@ -119,3 +118,46 @@ impl Display for AbortDerivationError {
 }
 
 impl Error for AbortDerivationError {}
+
+#[derive(Debug)]
+pub enum UpdateProductError {
+    Io(io::Error),
+    Git(GitCommandError),
+    Serde(serde_json::Error),
+    DerivationInProgress,
+    WrongNodeType(WrongNodeTypeError),
+    PathNotFound(PathNotFoundError),
+}
+impl Display for UpdateProductError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io(e) => e.fmt(f),
+            Self::Serde(e) => e.fmt(f),
+            Self::Git(e) => e.fmt(f),
+            Self::WrongNodeType(e) => e.fmt(f),
+            Self::PathNotFound(e) => e.fmt(f),
+            Self::DerivationInProgress => {
+                f.write_str("fatal: a derivation is currently in progress")
+            }
+        }
+    }
+}
+impl From<InitializeDerivationError> for UpdateProductError {
+    fn from(value: InitializeDerivationError) -> Self {
+        match value {
+            InitializeDerivationError::Io(e) => Self::Io(e),
+            InitializeDerivationError::Git(e) => Self::Git(e),
+            InitializeDerivationError::Serde(e) => Self::Serde(e),
+            InitializeDerivationError::DerivationInProgress => Self::DerivationInProgress,
+        }
+    }
+}
+impl From<ModelError> for UpdateProductError {
+    fn from(value: ModelError) -> Self {
+        match value {
+            ModelError::WrongNodeType(e) => Self::WrongNodeType(e),
+            ModelError::PathNotFound(e) => Self::PathNotFound(e),
+        }
+    }
+}
+impl Error for UpdateProductError {}

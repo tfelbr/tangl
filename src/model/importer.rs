@@ -1,4 +1,4 @@
-use crate::model::{QualifiedPath, TreeDataModel, WrongNodeTypeError};
+use crate::model::{NormalizedPath, TreeDataModel, WrongNodeTypeError};
 
 #[derive(Debug, Clone)]
 pub enum ImportFormat {
@@ -20,7 +20,7 @@ impl<S: Into<String>> From<S> for ImportFormat {
 }
 
 pub trait FormatParser {
-    fn parse(&self, data: &str) -> Vec<QualifiedPath>;
+    fn parse(&self, data: &str) -> Vec<NormalizedPath>;
 }
 
 pub struct ModelImporter {
@@ -52,7 +52,7 @@ impl ModelImporter {
 pub struct WaffleImporter;
 
 impl FormatParser for WaffleImporter {
-    fn parse(&self, _data: &str) -> Vec<QualifiedPath> {
+    fn parse(&self, _data: &str) -> Vec<NormalizedPath> {
         todo!()
     }
 }

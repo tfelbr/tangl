@@ -4,7 +4,10 @@ use crate::model::*;
 use clap::{Arg, Command};
 use std::error::Error;
 
-fn add_feature(feature: QualifiedPath, context: &mut CommandContext) -> Result<(), Box<dyn Error>> {
+fn add_feature(
+    feature: NormalizedPath,
+    context: &mut CommandContext,
+) -> Result<(), Box<dyn Error>> {
     let node_path = context.git.assert_current_node_path::<AnyHasBranch>()?;
     let current_path = if let Some(path) = node_path.try_convert_to::<ConcreteFeature>() {
         path.to_qualified_path()
@@ -72,7 +75,7 @@ impl CommandInterface for FeatureCommand {
         }
         match maybe_feature_name {
             Some(feature_name) => {
-                add_feature(QualifiedPath::from(feature_name), context)?;
+                add_feature(NormalizedPath::from(feature_name), context)?;
             }
             None => {
                 print_feature_tree(context, show_tags)?;

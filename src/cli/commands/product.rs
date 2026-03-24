@@ -6,7 +6,10 @@ use std::error::Error;
 
 const PRODUCT: &str = "product";
 
-fn add_product(product: QualifiedPath, context: &mut CommandContext) -> Result<(), Box<dyn Error>> {
+fn add_product(
+    product: NormalizedPath,
+    context: &mut CommandContext,
+) -> Result<(), Box<dyn Error>> {
     let node_path = context.git.assert_current_node_path::<AnyHasBranch>()?;
     let current_path = if let Some(path) = node_path.try_convert_to::<ConcreteProduct>() {
         path.to_qualified_path()

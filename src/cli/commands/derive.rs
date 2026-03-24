@@ -5,7 +5,6 @@ use crate::logging::TanglLogger;
 use crate::model::*;
 use crate::spl::*;
 use clap::{Arg, ArgAction, Command};
-use colored::Colorize;
 use std::error::Error;
 
 const FEATURES: &str = "features";
@@ -13,12 +12,57 @@ const CONTINUE: &str = "continue";
 const ABORT: &str = "abort";
 const RESET: &str = "reset";
 const OPTIMIZE: &str = "optimize";
+const UPDATE: &str = "update";
 
 pub fn fix_conflicts_hint() -> String {
     format!(
         "\nFix all conflicts, then run {} to commence the derivation.",
         format_command_help("tangl derive --continue"),
     )
+}
+
+fn initialize_hint(
+    state: DerivationState,
+    optimize: bool,
+    derivation_manager: &mut DerivationManager,
+    logger: &TanglLogger,
+) -> Result<(), Box<dyn Error>> {
+    match state {
+        DerivationState::InProgress => {
+            let order: MergeChainStatistic = derivation_manager.get_pending_chain()?;
+            logger.info("Derivation Preview\n");
+            if optimize {
+                logger.info("Suggesting the following merge order:");
+            }
+            logger.info(order.display_as_path());
+            if order.contains_conflicts() {
+                logger.info(format!("\nExpecting {} conflicts", order.get_n_conflict()))
+            } else {
+                logger.info("\nExpecting no conflicts")
+            };
+        }
+        DerivationState::None => logger.info("Product already up to date."),
+    }
+    Ok(())
+}
+
+fn initialize_error_hint() -> Box<dyn Error> {
+    let messages = vec![
+        "fatal: a derivation is already in progress".to_string(),
+        format!(
+            "  (Use {} to continue the derivation)",
+            format_command_help("tangl derive --continue")
+        ),
+        format!(
+            "  (Use {} to reset to the last state)",
+            format_command_help("tangl derive --reset")
+        ),
+        format!(
+            "  (Use {} to abort the derivation)",
+            format_command_help("tangl derive --abort")
+        ),
+    ];
+    messages.join("\n").into()
 }
 
 fn handle_initialize(
@@ -28,43 +72,15 @@ fn handle_initialize(
     logger: &TanglLogger,
 ) -> Result<(), Box<dyn Error>> {
     match derivation_manager.initialize_derivation(features, optimize) {
-        Ok(state) => state,
-        Err(error) => {
-            return match error {
-                InitializeDerivationError::DerivationInProgress => {
-                    let messages = vec![
-                        "fatal: a derivation is already in progress".to_string(),
-                        format!(
-                            "  (Use {} to continue the derivation)",
-                            format_command_help("tangl derive --continue")
-                        ),
-                        format!(
-                            "  (Use {} to reset to the last state)",
-                            format_command_help("tangl derive --reset")
-                        ),
-                        format!(
-                            "  (Use {} to abort the derivation)",
-                            format_command_help("tangl derive --abort")
-                        ),
-                    ];
-                    Err(messages.join("\n").into())
-                }
-                _ => Err(error.into()),
-            };
+        Ok(state) => {
+            initialize_hint(state.get_state(), optimize, derivation_manager, logger)?;
+            Ok(())
         }
-    };
-    let order: MergeChainStatistic = derivation_manager.get_pending_chain()?;
-    logger.info("Derivation Preview\n");
-    if optimize {
-        logger.info("Suggesting the following merge order:");
+        Err(error) => match error {
+            InitializeDerivationError::DerivationInProgress => Err(initialize_error_hint()),
+            _ => Err(error.into()),
+        },
     }
-    logger.info(order.display_as_path());
-    if order.contains_conflicts() {
-        logger.info(format!("\nExpecting {} conflicts", order.get_n_conflict()))
-    } else {
-        logger.info("\nExpecting no conflicts")
-    }
-    Ok(())
 }
 
 fn handle_continue(
@@ -83,26 +99,28 @@ fn handle_continue(
             };
         }
     };
-    let completed: Vec<QualifiedPath> = next
+    let completed: Vec<FeatureMetadata> = next
         .get_completed()
         .iter()
         .filter_map(|data| {
             if !old.get_completed().contains(data) {
-                Some(data.get_qualified_path())
+                Some(data.clone())
             } else {
                 None
             }
         })
         .collect();
-    let still_missing: MergeChainStatistic = next.get_missing().into();
-    logger.info(format!("Merged {} feature(s)", completed.len()));
-    for complete in completed {
-        logger.info(format!("  {}", complete.to_string().green()));
+    let completed_chain = completed
+        .to_merge_chain_statistic(derivation_manager.get_product().to_qualified_path());
+    let still_missing: MergeChainStatistic = derivation_manager.get_pending_chain()?;
+    logger.info(format!("Merged {} feature(s)", completed_chain.len() - 1));
+    for complete in completed_chain.iter_except_base() {
+        logger.info(format!("  {}", complete));
     }
-    if !still_missing.get_chain().is_empty() {
+    if !still_missing.is_empty() {
         logger.info(format!(
             "\n{} feature(s) remain(s)",
-            still_missing.get_chain().len()
+            still_missing.get_chain().len() - 1
         ));
         logger.info(still_missing.display_as_path());
         logger.info(fix_conflicts_hint());
@@ -110,6 +128,23 @@ fn handle_continue(
         logger.info("\nAll features merged. Derivation complete")
     }
     Ok(())
+}
+
+fn handle_update(
+    optimize: bool,
+    derivation_manager: &mut DerivationManager,
+    logger: &TanglLogger,
+) -> Result<(), Box<dyn Error>> {
+    match derivation_manager.update_product(optimize) {
+        Ok(state) => {
+            initialize_hint(state.get_state(), optimize, derivation_manager, logger)?;
+            Ok(())
+        }
+        Err(error) => match error {
+            UpdateProductError::DerivationInProgress => Err(initialize_error_hint()),
+            _ => Err(error.into()),
+        },
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -122,33 +157,33 @@ impl CommandDefinition for DeriveCommand {
             .disable_help_subcommand(true)
             .arg_required_else_help(true)
             .arg(Arg::new(FEATURES).action(ArgAction::Append))
-            .arg(
+            .args(vec![
                 Arg::new(CONTINUE)
                     .long("continue")
                     .action(ArgAction::SetTrue)
-                    .conflicts_with_all(vec![FEATURES, OPTIMIZE])
+                    .conflicts_with_all(vec![FEATURES, OPTIMIZE, UPDATE])
                     .help("Continue the ongoing derivation process"),
-            )
-            .arg(
                 Arg::new(ABORT)
                     .long(ABORT)
                     .action(ArgAction::SetTrue)
                     .exclusive(true)
                     .help("Abort the ongoing derivation process"),
-            )
-            .arg(
                 Arg::new(RESET)
                     .long(RESET)
                     .exclusive(true)
                     .help("Reset the ongoing derivation process to the last state"),
-            )
-            .arg(
                 Arg::new(OPTIMIZE)
                     .short('o')
                     .long(OPTIMIZE)
                     .action(ArgAction::SetTrue)
                     .help("Attempt to optimize the order of merges"),
-            )
+                Arg::new(UPDATE)
+                    .short('u')
+                    .long(UPDATE)
+                    .conflicts_with_all(vec![FEATURES])
+                    .action(ArgAction::SetTrue)
+                    .help("Updates product with newest commits of contained features"),
+            ])
             .arg(verbose())
     }
 }
@@ -162,7 +197,7 @@ impl CommandInterface for DeriveCommand {
             .get_argument_values::<String>(FEATURES)
             .unwrap_or(Vec::new())
             .into_iter()
-            .map(|e| current_area.get_path_to_feature_root() + QualifiedPath::from(e))
+            .map(|e| current_area.get_path_to_feature_root() + NormalizedPath::from(e))
             .collect::<Vec<_>>();
         drop(current_area);
         let continue_derivation = context
@@ -176,6 +211,10 @@ impl CommandInterface for DeriveCommand {
         let optimize = context
             .arg_helper
             .get_argument_value::<bool>(OPTIMIZE)
+            .unwrap();
+        let update = context
+            .arg_helper
+            .get_argument_value::<bool>(UPDATE)
             .unwrap();
 
         let features = context.git.get_model().assert_all(&all_feature_paths)?;
@@ -197,6 +236,8 @@ impl CommandInterface for DeriveCommand {
             handle_initialize(features, optimize, &mut derivation_manager, &context.logger)?;
         } else if continue_derivation {
             handle_continue(&mut derivation_manager, &context.logger)?;
+        } else if update {
+            handle_update(optimize, &mut derivation_manager, &context.logger)?;
         } else {
             unreachable!()
         };
@@ -221,7 +262,7 @@ impl CommandInterface for DeriveCommand {
                     let to_filter = completion_helper
                         .get_appendix_of(FEATURES)
                         .into_iter()
-                        .map(|p| feature_root_path.clone() + QualifiedPath::from(p))
+                        .map(|p| feature_root_path.clone() + NormalizedPath::from(p))
                         .collect();
                     let transformer = GlobToTypeNodePathTransformer::<_, AnyHasBranch>::new(
                         &to_filter,

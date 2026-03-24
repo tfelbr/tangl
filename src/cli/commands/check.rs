@@ -1,6 +1,6 @@
 use crate::cli::completion::CompletionHelper;
 use crate::cli::*;
-use crate::git::conflict::{ConflictChecker, MergeChainStatistic, MergeChainStatistics};
+use crate::git::conflict::{ConflictChecker, MergeChainStatistics};
 use crate::git::error::GitError;
 use crate::model::*;
 use crate::spl::InspectionManager;
@@ -113,7 +113,7 @@ impl CommandInterface for CheckCommand {
             .get_argument_values::<String>(&PATHS)
             .unwrap_or(Vec::new())
             .iter()
-            .map(|p| QualifiedPath::from(p))
+            .map(|p| NormalizedPath::from(p))
             .collect::<Vec<_>>();
         let permutations = context
             .arg_helper
@@ -159,8 +159,7 @@ impl CommandInterface for CheckCommand {
                 if state.get_total().len() == 0 {
                     return Err("Nothing to check against: product not derived yet".into());
                 }
-                let feature_meta: &MergeChainStatistic = &state.get_total().into();
-                let features = feature_meta.into();
+                let features = state.get_total().to_normalized_paths();
                 let node_paths = context
                     .git
                     .get_model()
@@ -176,7 +175,7 @@ impl CommandInterface for CheckCommand {
             }
         } else {
             let current_path = context.git.get_current_qualified_path()?;
-            let transformed_paths: Vec<QualifiedPath> = paths
+            let transformed_paths: Vec<NormalizedPath> = paths
                 .iter()
                 .map(|path| current_path.clone() + path.clone())
                 .collect();
@@ -234,7 +233,7 @@ impl CommandInterface for CheckCommand {
                     let to_exclude = completion_helper.get_appendix_of(PATHS);
                     let to_exclude_paths = to_exclude
                         .into_iter()
-                        .map(|p| current_path.clone() + QualifiedPath::from(p))
+                        .map(|p| current_path.clone() + NormalizedPath::from(p))
                         .collect();
                     let filter = ByGlobFilteringNodePathTransformer::new(
                         &to_exclude_paths,

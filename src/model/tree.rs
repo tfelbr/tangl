@@ -8,7 +8,7 @@ pub const PRODUCTS_PREFIX: &str = "product";
 #[derive(Clone, Debug)]
 pub struct TreeDataModel {
     virtual_root: Rc<Node>,
-    qualified_paths_with_branch: Vec<QualifiedPath>,
+    qualified_paths_with_branch: Vec<NormalizedPath>,
     unknowns_exist: bool,
 }
 impl TreeDataModel {
@@ -23,7 +23,7 @@ impl TreeDataModel {
             unknowns_exist: false,
         }
     }
-    pub fn insert_qualified_path(&mut self, path: QualifiedPath, is_tag: bool) -> NodeType {
+    pub fn insert_qualified_path(&mut self, path: NormalizedPath, is_tag: bool) -> NodeType {
         if !path.is_absolute() {
             panic!("To insert a path, it must be absolute");
         }
@@ -37,29 +37,29 @@ impl TreeDataModel {
         }
         node_type
     }
-    pub fn get_area(&self, path: &QualifiedPath) -> Option<NodePath<ConcreteArea>> {
+    pub fn get_area(&self, path: &NormalizedPath) -> Option<NodePath<ConcreteArea>> {
         self.get_virtual_root().to_area(path)
     }
     pub fn get_virtual_root(&self) -> NodePath<VirtualRoot> {
         NodePath::<VirtualRoot>::new(vec![self.virtual_root.clone()], self.unknowns_exist)
     }
-    pub fn get_node_path<T: SymbolicNodeType>(&self, path: &QualifiedPath) -> Option<NodePath<T>> {
+    pub fn get_node_path<T: SymbolicNodeType>(&self, path: &NormalizedPath) -> Option<NodePath<T>> {
         let initial_path = self.get_virtual_root();
         let new_path = path.strip_n_left(1);
         initial_path.move_to(&new_path)?.try_convert_to()
     }
-    pub fn has_branch(&self, qualified_path: &QualifiedPath) -> bool {
+    pub fn has_branch(&self, qualified_path: &NormalizedPath) -> bool {
         self.qualified_paths_with_branch
             .iter()
             .find(|e| *e == qualified_path)
             .is_some()
     }
-    pub fn get_qualified_paths_with_branches(&self) -> &Vec<QualifiedPath> {
+    pub fn get_qualified_paths_with_branches(&self) -> &Vec<NormalizedPath> {
         &self.qualified_paths_with_branch
     }
     pub fn assert_path<T: SymbolicNodeType>(
         &self,
-        path: &QualifiedPath,
+        path: &NormalizedPath,
     ) -> Result<NodePath<T>, ModelError> {
         if let Some(node_path) = self.get_node_path::<AnyNode>(path) {
             if let Some(concrete) = node_path.try_convert_to::<T>() {
@@ -79,7 +79,7 @@ impl TreeDataModel {
     }
     pub fn assert_all<T: SymbolicNodeType>(
         &self,
-        paths: &Vec<QualifiedPath>,
+        paths: &Vec<NormalizedPath>,
     ) -> Result<Vec<NodePath<T>>, ModelError> {
         let mut final_paths: Vec<NodePath<T>> = vec![];
         for path in paths.iter() {
@@ -96,9 +96,9 @@ mod tests {
     #[test]
     fn tree_node_path_with_virtual_root() {
         let mut tree = TreeDataModel::new();
-        tree.insert_qualified_path(QualifiedPath::from("/main"), false);
+        tree.insert_qualified_path(NormalizedPath::from("/main"), false);
         let path = tree
-            .get_node_path::<AnyNode>(&QualifiedPath::from("/main"))
+            .get_node_path::<AnyNode>(&NormalizedPath::from("/main"))
             .unwrap();
         assert_eq!(path.to_qualified_path(), "/main")
     }

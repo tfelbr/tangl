@@ -1,11 +1,11 @@
-use crate::model::QualifiedPath;
+use crate::model::NormalizedPath;
 use std::collections::HashSet;
 
 pub struct RelativePathCompleter {
-    reference_path: QualifiedPath,
+    reference_path: NormalizedPath,
 }
 impl RelativePathCompleter {
-    pub fn new(reference_path: QualifiedPath) -> Self {
+    pub fn new(reference_path: NormalizedPath) -> Self {
         if reference_path.is_empty() {
             panic!("Reference path must not be empty")
         }
@@ -13,10 +13,10 @@ impl RelativePathCompleter {
     }
     pub fn complete(
         &self,
-        prefix: QualifiedPath,
-        paths: impl Iterator<Item = QualifiedPath>,
+        prefix: NormalizedPath,
+        paths: impl Iterator<Item = NormalizedPath>,
     ) -> Vec<String> {
-        let filtered: Vec<QualifiedPath> = self
+        let filtered: Vec<NormalizedPath> = self
             .transform_and_filter_path(prefix.clone(), paths)
             .collect();
         match filtered.len() {
@@ -48,9 +48,9 @@ impl RelativePathCompleter {
     }
     fn transform_and_filter_path<'a>(
         &self,
-        prefix: QualifiedPath,
-        paths: impl Iterator<Item = QualifiedPath>,
-    ) -> impl Iterator<Item = QualifiedPath> {
+        prefix: NormalizedPath,
+        paths: impl Iterator<Item = NormalizedPath>,
+    ) -> impl Iterator<Item = NormalizedPath> {
         let transformed_prefix = if prefix.last().is_some() {
             match prefix.last().unwrap().as_str() {
                 "." | ".." => prefix.as_dir(),
@@ -77,16 +77,16 @@ impl RelativePathCompleter {
 
 #[cfg(test)]
 pub mod test_utils {
-    use crate::model::QualifiedPath;
+    use crate::model::NormalizedPath;
 
-    pub fn setup_qualified_paths() -> Vec<QualifiedPath> {
+    pub fn setup_qualified_paths() -> Vec<NormalizedPath> {
         vec![
-            QualifiedPath::from("/foo"),
-            QualifiedPath::from("/foo/bar/baz1"),
-            QualifiedPath::from("/foo/bar/baz2"),
-            QualifiedPath::from("/foo/abc/def"),
-            QualifiedPath::from("/foo/abc"),
-            QualifiedPath::from("/bar"),
+            NormalizedPath::from("/foo"),
+            NormalizedPath::from("/foo/bar/baz1"),
+            NormalizedPath::from("/foo/bar/baz2"),
+            NormalizedPath::from("/foo/abc/def"),
+            NormalizedPath::from("/foo/abc"),
+            NormalizedPath::from("/bar"),
         ]
     }
 }
@@ -99,19 +99,19 @@ mod tests {
     #[test]
     fn test_relative_path_completion_from_virtual_root() {
         let paths = setup_qualified_paths();
-        let completion = RelativePathCompleter::new(QualifiedPath::from(""));
+        let completion = RelativePathCompleter::new(NormalizedPath::from(""));
 
-        let mut direct = completion.complete(QualifiedPath::from(""), paths.clone().into_iter());
+        let mut direct = completion.complete(NormalizedPath::from(""), paths.clone().into_iter());
         direct.sort();
         assert_eq!(direct, vec!["bar", "foo", "foo/",]);
 
         let mut prefixed1 =
-            completion.complete(QualifiedPath::from("/f"), paths.clone().into_iter());
+            completion.complete(NormalizedPath::from("/f"), paths.clone().into_iter());
         prefixed1.sort();
         assert_eq!(prefixed1, vec!["/foo", "/foo/"]);
 
         let mut prefixed2 =
-            completion.complete(QualifiedPath::from("/"), paths.clone().into_iter());
+            completion.complete(NormalizedPath::from("/"), paths.clone().into_iter());
         prefixed2.sort();
         assert_eq!(prefixed2, vec!["/bar", "/foo", "/foo/"]);
     }
@@ -119,9 +119,9 @@ mod tests {
     #[test]
     fn test_relative_path_completion_relative_identifier_current_path() {
         let paths = setup_qualified_paths();
-        let completion = RelativePathCompleter::new(QualifiedPath::from("/foo"));
+        let completion = RelativePathCompleter::new(NormalizedPath::from("/foo"));
 
-        let mut direct = completion.complete(QualifiedPath::from("."), paths.clone().into_iter());
+        let mut direct = completion.complete(NormalizedPath::from("."), paths.clone().into_iter());
         direct.sort();
         assert_eq!(
             direct,
@@ -129,16 +129,16 @@ mod tests {
         );
 
         let mut direct_with_slash =
-            completion.complete(QualifiedPath::from("./"), paths.clone().into_iter());
+            completion.complete(NormalizedPath::from("./"), paths.clone().into_iter());
         direct_with_slash.sort();
         assert_eq!(direct_with_slash, vec!["./abc", "./abc/", "./bar/"]);
 
         let mut prefixed =
-            completion.complete(QualifiedPath::from("./a"), paths.clone().into_iter());
+            completion.complete(NormalizedPath::from("./a"), paths.clone().into_iter());
         prefixed.sort();
         assert_eq!(prefixed, vec!["./abc", "./abc/"]);
 
-        let mut consecutive = completion.complete(QualifiedPath::from("./b"), paths.into_iter());
+        let mut consecutive = completion.complete(NormalizedPath::from("./b"), paths.into_iter());
         consecutive.sort();
         assert_eq!(consecutive, vec!["./bar/baz1", "./bar/baz2"]);
     }
@@ -146,14 +146,15 @@ mod tests {
     #[test]
     fn test_relative_path_completion_relative_identifier_previous_path() {
         let paths = setup_qualified_paths();
-        let completion = RelativePathCompleter::new(QualifiedPath::from("/foo"));
+        let completion = RelativePathCompleter::new(NormalizedPath::from("/foo"));
 
-        let mut direct = completion.complete(QualifiedPath::from("../"), paths.clone().into_iter());
+        let mut direct =
+            completion.complete(NormalizedPath::from("../"), paths.clone().into_iter());
         direct.sort();
         assert_eq!(direct, vec!["../bar", "../foo", "../foo/"]);
 
         let mut consecutive =
-            completion.complete(QualifiedPath::from("../foo/"), paths.clone().into_iter());
+            completion.complete(NormalizedPath::from("../foo/"), paths.clone().into_iter());
         consecutive.sort();
         assert_eq!(
             consecutive,
@@ -161,7 +162,7 @@ mod tests {
         );
 
         let mut previous_of_previous =
-            completion.complete(QualifiedPath::from("abc/../../"), paths.into_iter());
+            completion.complete(NormalizedPath::from("abc/../../"), paths.into_iter());
         previous_of_previous.sort();
         assert_eq!(
             previous_of_previous,
@@ -172,17 +173,18 @@ mod tests {
     #[test]
     fn test_relative_path_completion_current_path() {
         let paths = setup_qualified_paths();
-        let completion = RelativePathCompleter::new(QualifiedPath::from("/foo"));
+        let completion = RelativePathCompleter::new(NormalizedPath::from("/foo"));
 
-        let mut direct = completion.complete(QualifiedPath::from(""), paths.clone().into_iter());
+        let mut direct = completion.complete(NormalizedPath::from(""), paths.clone().into_iter());
         direct.sort();
         assert_eq!(direct, vec!["abc", "abc/", "bar/"]);
 
-        let mut prefixed = completion.complete(QualifiedPath::from("a"), paths.clone().into_iter());
+        let mut prefixed =
+            completion.complete(NormalizedPath::from("a"), paths.clone().into_iter());
         prefixed.sort();
         assert_eq!(prefixed, vec!["abc", "abc/"]);
 
-        let mut consecutive = completion.complete(QualifiedPath::from("b"), paths.into_iter());
+        let mut consecutive = completion.complete(NormalizedPath::from("b"), paths.into_iter());
         consecutive.sort();
         assert_eq!(consecutive, vec!["bar/baz1", "bar/baz2"]);
     }
@@ -190,6 +192,6 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_relative_path_completion_empty_reference() {
-        RelativePathCompleter::new(QualifiedPath::new());
+        RelativePathCompleter::new(NormalizedPath::new());
     }
 }

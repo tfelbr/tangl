@@ -1,5 +1,5 @@
 use crate::cli::CommandContext;
-use crate::model::{HasBranch, QualifiedPath};
+use crate::model::{HasBranch, NormalizedPath};
 use clap::{Arg, ArgAction};
 use colored::Colorize;
 use std::error::Error;
@@ -35,7 +35,7 @@ pub fn format_command_help<S: Into<String>>(command: S) -> String {
 }
 
 pub fn delete_path<T: HasBranch>(
-    path: &QualifiedPath,
+    path: &NormalizedPath,
     context: &mut CommandContext,
 ) -> Result<(), Box<dyn Error>> {
     match context.git.get_model().assert_path::<T>(&path) {

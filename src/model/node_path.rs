@@ -13,7 +13,7 @@ pub struct NodePath<T: SymbolicNodeType> {
 }
 
 impl<T: HasFeatureChildren> NodePath<T> {
-    pub fn move_to_feature(self, path: &QualifiedPath) -> Option<NodePath<Feature>> {
+    pub fn move_to_feature(self, path: &NormalizedPath) -> Option<NodePath<Feature>> {
         self.move_to(path)?.try_convert_to()
     }
     pub fn iter_features(&self) -> impl Iterator<Item = NodePath<Feature>> {
@@ -26,7 +26,7 @@ impl<T: HasFeatureChildren> NodePath<T> {
 }
 
 impl<T: HasProductChildren> NodePath<T> {
-    pub fn move_to_product(self, path: &QualifiedPath) -> Option<NodePath<Product>> {
+    pub fn move_to_product(self, path: &NormalizedPath) -> Option<NodePath<Product>> {
         self.move_to(path)?.try_convert_to()
     }
     pub fn iter_products(&self) -> impl Iterator<Item = NodePath<Product>> {
@@ -52,17 +52,17 @@ impl NodePath<AnyNode> {
 }
 
 impl NodePath<VirtualRoot> {
-    pub fn to_area(self, area: &QualifiedPath) -> Option<NodePath<ConcreteArea>> {
+    pub fn to_area(self, area: &NormalizedPath) -> Option<NodePath<ConcreteArea>> {
         self.move_to(area)?.try_convert_to()
     }
 }
 
 impl NodePath<ConcreteArea> {
-    pub fn get_path_to_feature_root(&self) -> QualifiedPath {
-        self.to_qualified_path() + QualifiedPath::from(FEATURES_PREFIX)
+    pub fn get_path_to_feature_root(&self) -> NormalizedPath {
+        self.to_qualified_path() + NormalizedPath::from(FEATURES_PREFIX)
     }
-    pub fn get_path_to_product_root(&self) -> QualifiedPath {
-        self.to_qualified_path() + QualifiedPath::from(PRODUCTS_PREFIX)
+    pub fn get_path_to_product_root(&self) -> NormalizedPath {
+        self.to_qualified_path() + NormalizedPath::from(PRODUCTS_PREFIX)
     }
     pub fn move_to_feature_root(self) -> Option<NodePath<FeatureRoot>> {
         if self.unknown_mode {
@@ -71,7 +71,7 @@ impl NodePath<ConcreteArea> {
                 self.unknown_mode,
             ))
         } else {
-            self.move_to(&QualifiedPath::from(FEATURES_PREFIX))?
+            self.move_to(&NormalizedPath::from(FEATURES_PREFIX))?
                 .try_convert_to()
         }
     }
@@ -82,15 +82,15 @@ impl NodePath<ConcreteArea> {
                 self.unknown_mode,
             ))
         } else {
-            self.move_to(&QualifiedPath::from(PRODUCTS_PREFIX))?
+            self.move_to(&NormalizedPath::from(PRODUCTS_PREFIX))?
                 .try_convert_to()
         }
     }
 }
 
-impl<T: SymbolicNodeType> ToQualifiedPath for NodePath<T> {
-    fn to_qualified_path(&self) -> QualifiedPath {
-        let mut path = QualifiedPath::new();
+impl<T: SymbolicNodeType> ToNormalizedPath for NodePath<T> {
+    fn to_qualified_path(&self) -> NormalizedPath {
+        let mut path = NormalizedPath::new();
         for p in self.path.iter() {
             path.push(p.get_name());
         }
@@ -117,14 +117,14 @@ impl<T: SymbolicNodeType> NodePath<T> {
             None
         }
     }
-    pub fn move_to(mut self, path: &QualifiedPath) -> Option<NodePath<AnyNode>> {
+    pub fn move_to(mut self, path: &NormalizedPath) -> Option<NodePath<AnyNode>> {
         for p in path.iter_string() {
             self.path.push(self.get_node().get_child(p)?.clone());
         }
         Some(NodePath::<AnyNode>::new(self.path, self.unknown_mode))
     }
 
-    pub fn move_to_last_valid(self, path: &QualifiedPath) -> NodePath<AnyNode> {
+    pub fn move_to_last_valid(self, path: &NormalizedPath) -> NodePath<AnyNode> {
         let mut current = self.as_any_type();
         for part in path.iter() {
             let next = current.clone().move_to(&part);
@@ -153,11 +153,11 @@ impl<T: SymbolicNodeType> NodePath<T> {
             to_iter
         })
     }
-    pub fn get_tags(&self) -> Vec<QualifiedPath> {
+    pub fn get_tags(&self) -> Vec<NormalizedPath> {
         self.get_node()
             .iter_children()
             .filter_map(|(name, child)| match child.get_type() {
-                NodeType::Tag => Some(QualifiedPath::from(name.clone())),
+                NodeType::Tag => Some(NormalizedPath::from(name.clone())),
                 _ => None,
             })
             .collect()

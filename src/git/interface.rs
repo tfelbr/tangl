@@ -122,7 +122,7 @@ impl GitInterface {
             .collect();
         for branch in all_branches {
             if !branch.is_empty() {
-                let mut path = QualifiedPath::from("");
+                let mut path = NormalizedPath::from("");
                 path.push(branch);
                 self.model.insert_qualified_path(path, false);
             }
@@ -136,7 +136,7 @@ impl GitInterface {
             .collect();
         for tag in all_tags {
             if !tag.is_empty() {
-                let mut path = QualifiedPath::from("");
+                let mut path = NormalizedPath::from("");
                 path.push(tag);
                 self.model.insert_qualified_path(path, true);
             }
@@ -154,8 +154,8 @@ impl GitInterface {
         Ok(output_to_result(out, &command)?)
     }
 
-    pub fn get_current_qualified_path(&self) -> Result<QualifiedPath, GitError> {
-        let mut base = QualifiedPath::from("");
+    pub fn get_current_qualified_path(&self) -> Result<NormalizedPath, GitError> {
+        let mut base = NormalizedPath::from("");
         base.push(self.get_current_branch()?);
         Ok(base)
     }
@@ -179,7 +179,7 @@ impl GitInterface {
 
     pub fn get_current_area(&self) -> Result<NodePath<ConcreteArea>, GitError> {
         let current_qualified_path = self.get_current_qualified_path()?;
-        let qualified_path = QualifiedPath::from(&current_qualified_path[1]);
+        let qualified_path = NormalizedPath::from(&current_qualified_path[1]);
         Ok(self.model.get_area(&qualified_path).unwrap())
     }
 
@@ -196,7 +196,7 @@ impl GitInterface {
         Ok(output_to_result(out, &command)?)
     }
 
-    pub(super) fn checkout_raw(&self, path: &QualifiedPath) -> Result<String, GitError> {
+    pub(super) fn checkout_raw(&self, path: &NormalizedPath) -> Result<String, GitError> {
         let branch = path.to_git_branch();
         let command = vec!["checkout", branch.as_str()];
         let out = self.raw_git_interface.run(&command)?;
@@ -207,7 +207,7 @@ impl GitInterface {
         self.checkout_raw(&path.to_qualified_path())
     }
 
-    pub(super) fn create_branch_no_mut(&self, path: &QualifiedPath) -> Result<String, GitError> {
+    pub(super) fn create_branch_no_mut(&self, path: &NormalizedPath) -> Result<String, GitError> {
         let branch = path.to_git_branch();
         let command = vec!["branch", branch.as_str()];
         Ok(output_to_result(
@@ -218,7 +218,7 @@ impl GitInterface {
 
     pub fn create_branch<T: SymbolicNodeType>(
         &mut self,
-        path: &QualifiedPath,
+        path: &NormalizedPath,
     ) -> Result<NodePath<T>, GitWrongNodeTypeError> {
         let node_type = self.model.insert_qualified_path(path.clone(), false);
         if !T::is_compatible(&node_type) {
@@ -233,7 +233,7 @@ impl GitInterface {
         Ok(self.model.get_node_path(&path).unwrap())
     }
 
-    pub(super) fn delete_branch_no_mut(&self, path: &QualifiedPath) -> Result<String, GitError> {
+    pub(super) fn delete_branch_no_mut(&self, path: &NormalizedPath) -> Result<String, GitError> {
         let branch = path.to_git_branch();
         let command = vec!["branch", "-D", branch.as_str()];
         let out = self.raw_git_interface.run(&command)?;

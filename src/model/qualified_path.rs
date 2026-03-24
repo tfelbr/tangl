@@ -4,27 +4,27 @@ use std::ops::{Add, Index};
 const SEPARATOR: char = '/';
 
 #[derive(Clone, Debug, Hash, Eq, Ord, PartialOrd)]
-pub struct QualifiedPath {
+pub struct NormalizedPath {
     path: Vec<String>,
 }
-impl From<String> for QualifiedPath {
+impl From<String> for NormalizedPath {
     fn from(value: String) -> Self {
         let mut qualified_path = Self::new();
         qualified_path.push(value);
         qualified_path
     }
 }
-impl From<&String> for QualifiedPath {
+impl From<&String> for NormalizedPath {
     fn from(value: &String) -> Self {
         Self::from(value.to_string())
     }
 }
-impl From<&str> for QualifiedPath {
+impl From<&str> for NormalizedPath {
     fn from(value: &str) -> Self {
         Self::from(value.to_string())
     }
 }
-impl From<Vec<String>> for QualifiedPath {
+impl From<Vec<String>> for NormalizedPath {
     fn from(value: Vec<String>) -> Self {
         let mut path = Self::new();
         for v in value {
@@ -33,12 +33,12 @@ impl From<Vec<String>> for QualifiedPath {
         path
     }
 }
-impl From<QualifiedPath> for String {
-    fn from(value: QualifiedPath) -> Self {
+impl From<NormalizedPath> for String {
+    fn from(value: NormalizedPath) -> Self {
         value.to_string()
     }
 }
-impl PartialEq for QualifiedPath {
+impl PartialEq for NormalizedPath {
     fn eq(&self, other: &Self) -> bool {
         self.path == other.path
     }
@@ -47,7 +47,7 @@ impl PartialEq for QualifiedPath {
         self.path != other.path
     }
 }
-impl PartialEq<String> for QualifiedPath {
+impl PartialEq<String> for NormalizedPath {
     fn eq(&self, other: &String) -> bool {
         self.to_string() == *other
     }
@@ -56,7 +56,7 @@ impl PartialEq<String> for QualifiedPath {
         self.to_string() != *other
     }
 }
-impl PartialEq<&str> for QualifiedPath {
+impl PartialEq<&str> for NormalizedPath {
     fn eq(&self, other: &&str) -> bool {
         self.to_string() == *other
     }
@@ -65,13 +65,13 @@ impl PartialEq<&str> for QualifiedPath {
         self.to_string() != *other
     }
 }
-impl Add for QualifiedPath {
-    type Output = QualifiedPath;
+impl Add for NormalizedPath {
+    type Output = NormalizedPath;
 
     fn add(self, rhs: Self) -> Self::Output {
         let mut next_index = self.len();
         let mut new_path = self;
-        if new_path.last_is(&QualifiedPath::from("")) && new_path.len() > 1 {
+        if new_path.last_is(&NormalizedPath::from("")) && new_path.len() > 1 {
             new_path = new_path.strip_n_right(new_path.len() - 1);
         }
         for (i, part) in rhs.iter_string().enumerate() {
@@ -99,19 +99,19 @@ impl Add for QualifiedPath {
         new_path
     }
 }
-impl Display for QualifiedPath {
+impl Display for NormalizedPath {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.path.join("/").as_str())
     }
 }
-impl Index<usize> for QualifiedPath {
+impl Index<usize> for NormalizedPath {
     type Output = String;
 
     fn index(&self, index: usize) -> &Self::Output {
         &self.path[index]
     }
 }
-impl QualifiedPath {
+impl NormalizedPath {
     pub fn new() -> Self {
         Self { path: Vec::new() }
     }
@@ -136,16 +136,16 @@ impl QualifiedPath {
             self.path.push(split.to_string());
         }
     }
-    pub fn strip_n(&self, n_left: usize, n_right: usize) -> QualifiedPath {
-        QualifiedPath::from(self.path[n_left..n_right].to_vec())
+    pub fn strip_n(&self, n_left: usize, n_right: usize) -> NormalizedPath {
+        NormalizedPath::from(self.path[n_left..n_right].to_vec())
     }
-    pub fn strip_n_left(&self, n: usize) -> QualifiedPath {
+    pub fn strip_n_left(&self, n: usize) -> NormalizedPath {
         self.strip_n(n, self.path.len())
     }
-    pub fn strip_n_right(&self, n: usize) -> QualifiedPath {
+    pub fn strip_n_right(&self, n: usize) -> NormalizedPath {
         self.strip_n(0, n)
     }
-    pub fn trim_whitespaces(&self) -> QualifiedPath {
+    pub fn trim_whitespaces(&self) -> NormalizedPath {
         let mut new_path = self.path.clone();
         match new_path.first() {
             Some(value) => {
@@ -163,15 +163,15 @@ impl QualifiedPath {
             }
             None => {}
         }
-        QualifiedPath::from(new_path)
+        NormalizedPath::from(new_path)
     }
-    pub fn replace<S: Into<String>>(&self, index: usize, value: S) -> QualifiedPath {
+    pub fn replace<S: Into<String>>(&self, index: usize, value: S) -> NormalizedPath {
         let mut new_path = self.path.clone();
         new_path.insert(index, value.into());
-        QualifiedPath::from(new_path)
+        NormalizedPath::from(new_path)
     }
-    pub fn first(&self) -> Option<QualifiedPath> {
-        Some(QualifiedPath::from(self.path.first()?.clone()))
+    pub fn first(&self) -> Option<NormalizedPath> {
+        Some(NormalizedPath::from(self.path.first()?.clone()))
     }
     pub fn last(&self) -> Option<&String> {
         self.path.last()
@@ -179,33 +179,33 @@ impl QualifiedPath {
     pub fn is_empty(&self) -> bool {
         self.path.is_empty()
     }
-    pub fn iter(&self) -> impl Iterator<Item = QualifiedPath> {
-        self.iter_string().map(|s| QualifiedPath::from(s.clone()))
+    pub fn iter(&self) -> impl Iterator<Item = NormalizedPath> {
+        self.iter_string().map(|s| NormalizedPath::from(s.clone()))
     }
     pub fn iter_string(&self) -> impl Iterator<Item = &String> {
         self.path.iter()
     }
-    pub fn get(&self, index: usize) -> Option<QualifiedPath> {
-        Some(QualifiedPath::from(self.path.get(index)?.clone()))
+    pub fn get(&self, index: usize) -> Option<NormalizedPath> {
+        Some(NormalizedPath::from(self.path.get(index)?.clone()))
     }
-    pub fn starts_with(&self, prefix: &QualifiedPath) -> bool {
+    pub fn starts_with(&self, prefix: &NormalizedPath) -> bool {
         self.to_string().starts_with(&prefix.to_string())
     }
-    pub fn last_is(&self, suffix: &QualifiedPath) -> bool {
+    pub fn last_is(&self, suffix: &NormalizedPath) -> bool {
         self.last() == suffix.last()
     }
     pub fn len(&self) -> usize {
         self.path.len()
     }
-    pub fn as_dir(&self) -> QualifiedPath {
+    pub fn as_dir(&self) -> NormalizedPath {
         let mut new_path = self.path.clone();
         new_path.push("".to_string());
-        QualifiedPath::from(new_path)
+        NormalizedPath::from(new_path)
     }
-    pub fn as_absolute(&self) -> QualifiedPath {
+    pub fn as_absolute(&self) -> NormalizedPath {
         let mut new_path = self.path.clone();
         new_path.insert(0, "".to_string());
-        QualifiedPath::from(new_path)
+        NormalizedPath::from(new_path)
     }
     pub fn is_dir(&self) -> bool {
         self.path.len() > 1 && self.last().unwrap() == ""
@@ -215,13 +215,17 @@ impl QualifiedPath {
     }
 }
 
-pub trait ToQualifiedPath {
-    fn to_qualified_path(&self) -> QualifiedPath;
+pub trait ToNormalizedPath {
+    fn to_qualified_path(&self) -> NormalizedPath;
 }
 
-impl ToQualifiedPath for String {
-    fn to_qualified_path(&self) -> QualifiedPath {
-        QualifiedPath::from(self.clone())
+pub trait ToNormalizedPaths {
+    fn to_normalized_paths(&self) -> Vec<NormalizedPath>;
+}
+
+impl ToNormalizedPath for String {
+    fn to_qualified_path(&self) -> NormalizedPath {
+        NormalizedPath::from(self.clone())
     }
 }
 
@@ -230,118 +234,121 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_qualified_path_from_qualified() {
-        assert_eq!(QualifiedPath::from("foo/bar").path, vec!["foo", "bar"]);
-        assert_eq!(QualifiedPath::from("/foo/bar").path, vec!["", "foo", "bar"]);
-        assert_eq!(QualifiedPath::from("/foo/bar").to_string(), "/foo/bar");
-        assert_eq!(QualifiedPath::from("foo/").path, vec!["foo", ""]);
-        assert_eq!(QualifiedPath::from("/").path, vec!["", ""]);
+    fn test_normalized_path_from_qualified() {
+        assert_eq!(NormalizedPath::from("foo/bar").path, vec!["foo", "bar"]);
+        assert_eq!(
+            NormalizedPath::from("/foo/bar").path,
+            vec!["", "foo", "bar"]
+        );
+        assert_eq!(NormalizedPath::from("/foo/bar").to_string(), "/foo/bar");
+        assert_eq!(NormalizedPath::from("foo/").path, vec!["foo", ""]);
+        assert_eq!(NormalizedPath::from("/").path, vec!["", ""]);
     }
 
     #[test]
-    fn test_qualified_path_from_git_branch() {
-        assert_eq!(QualifiedPath::from("_foo/bar").path, vec!["foo", "bar"]);
+    fn test_normalized_path_from_git_branch() {
+        assert_eq!(NormalizedPath::from("_foo/bar").path, vec!["foo", "bar"]);
         assert_eq!(
-            QualifiedPath::from("_foo/bar".to_string()).path,
+            NormalizedPath::from("_foo/bar".to_string()).path,
             vec!["foo", "bar"]
         );
         assert_eq!(
-            QualifiedPath::from("_foo/_bar/baz").path,
+            NormalizedPath::from("_foo/_bar/baz").path,
             vec!["foo", "bar", "baz"]
         );
     }
 
     #[test]
-    fn test_qualified_path_to_git_branch() {
-        assert_eq!(QualifiedPath::from("foo/bar").to_git_branch(), "_foo/bar");
-        assert_eq!(QualifiedPath::from("/foo/bar").to_git_branch(), "_foo/bar");
+    fn test_normalized_path_to_git_branch() {
+        assert_eq!(NormalizedPath::from("foo/bar").to_git_branch(), "_foo/bar");
+        assert_eq!(NormalizedPath::from("/foo/bar").to_git_branch(), "_foo/bar");
     }
 
     #[test]
-    fn test_qualified_path_add_empty() {
-        let l = QualifiedPath::new();
-        let r = QualifiedPath::from("foo/bar");
-        assert_eq!(l + r, QualifiedPath::from("foo/bar"));
+    fn test_normalized_path_add_empty() {
+        let l = NormalizedPath::new();
+        let r = NormalizedPath::from("foo/bar");
+        assert_eq!(l + r, NormalizedPath::from("foo/bar"));
 
-        let l = QualifiedPath::new();
-        let r = QualifiedPath::from("/foo/bar");
-        assert_eq!(l + r, QualifiedPath::from("/foo/bar"));
+        let l = NormalizedPath::new();
+        let r = NormalizedPath::from("/foo/bar");
+        assert_eq!(l + r, NormalizedPath::from("/foo/bar"));
     }
 
     #[test]
-    fn test_qualified_path_add_absolute() {
-        let l = QualifiedPath::from("foo");
-        let r = QualifiedPath::from("bar/baz");
-        assert_eq!(l + r, QualifiedPath::from("foo/bar/baz"));
+    fn test_normalized_path_add_absolute() {
+        let l = NormalizedPath::from("foo");
+        let r = NormalizedPath::from("bar/baz");
+        assert_eq!(l + r, NormalizedPath::from("foo/bar/baz"));
 
-        let l = QualifiedPath::from("");
-        let r = QualifiedPath::from("bar/baz");
+        let l = NormalizedPath::from("");
+        let r = NormalizedPath::from("bar/baz");
         assert_eq!((l + r).path, vec!["", "bar", "baz"]);
 
-        let l = QualifiedPath::from("foo/");
-        let r = QualifiedPath::from("bar/baz");
-        assert_eq!(l + r, QualifiedPath::from("foo/bar/baz"));
+        let l = NormalizedPath::from("foo/");
+        let r = NormalizedPath::from("bar/baz");
+        assert_eq!(l + r, NormalizedPath::from("foo/bar/baz"));
     }
 
     #[test]
-    fn test_qualified_path_add_relative() {
-        let l = QualifiedPath::from("foo");
-        let r = QualifiedPath::from("..");
-        assert_eq!(l + r, QualifiedPath::new());
+    fn test_normalized_path_add_relative() {
+        let l = NormalizedPath::from("foo");
+        let r = NormalizedPath::from("..");
+        assert_eq!(l + r, NormalizedPath::new());
 
-        let l = QualifiedPath::from("foo");
-        let r = QualifiedPath::from("./bar");
-        assert_eq!(l + r, QualifiedPath::from("foo/bar"));
+        let l = NormalizedPath::from("foo");
+        let r = NormalizedPath::from("./bar");
+        assert_eq!(l + r, NormalizedPath::from("foo/bar"));
 
-        let l = QualifiedPath::from("foo");
-        let r = QualifiedPath::from("./");
-        assert_eq!(l + r, QualifiedPath::from("foo/"));
+        let l = NormalizedPath::from("foo");
+        let r = NormalizedPath::from("./");
+        assert_eq!(l + r, NormalizedPath::from("foo/"));
 
-        let l = QualifiedPath::from("foo");
-        let r = QualifiedPath::from("../bar");
-        assert_eq!(l + r, QualifiedPath::from("bar"));
+        let l = NormalizedPath::from("foo");
+        let r = NormalizedPath::from("../bar");
+        assert_eq!(l + r, NormalizedPath::from("bar"));
 
-        let l = QualifiedPath::from("foo/bar");
-        let r = QualifiedPath::from("../baz");
-        assert_eq!(l + r, QualifiedPath::from("foo/baz"));
+        let l = NormalizedPath::from("foo/bar");
+        let r = NormalizedPath::from("../baz");
+        assert_eq!(l + r, NormalizedPath::from("foo/baz"));
 
-        let l = QualifiedPath::from("foo/bar");
-        let r = QualifiedPath::from("../../baz");
-        assert_eq!(l + r, QualifiedPath::from("baz"));
+        let l = NormalizedPath::from("foo/bar");
+        let r = NormalizedPath::from("../../baz");
+        assert_eq!(l + r, NormalizedPath::from("baz"));
 
-        let l = QualifiedPath::from("foo/bar");
-        let r = QualifiedPath::from("../../../../../../baz");
-        assert_eq!(l + r, QualifiedPath::from("baz"));
+        let l = NormalizedPath::from("foo/bar");
+        let r = NormalizedPath::from("../../../../../../baz");
+        assert_eq!(l + r, NormalizedPath::from("baz"));
 
-        let l = QualifiedPath::from("foo/bar");
-        let r = QualifiedPath::from("baz/../baz/../baz/../baz");
-        assert_eq!(l + r, QualifiedPath::from("foo/bar/baz"));
+        let l = NormalizedPath::from("foo/bar");
+        let r = NormalizedPath::from("baz/../baz/../baz/../baz");
+        assert_eq!(l + r, NormalizedPath::from("foo/bar/baz"));
 
-        let l = QualifiedPath::from("foo/bar");
-        let r = QualifiedPath::from("../baz/../baz/../baz");
-        assert_eq!(l + r, QualifiedPath::from("foo/baz"));
+        let l = NormalizedPath::from("foo/bar");
+        let r = NormalizedPath::from("../baz/../baz/../baz");
+        assert_eq!(l + r, NormalizedPath::from("foo/baz"));
     }
 
     #[test]
-    fn test_qualified_path_add_whitespaces() {
-        let l = QualifiedPath::from("foo");
-        let r = QualifiedPath::from("");
-        assert_eq!(l + r, QualifiedPath::from("foo/"));
+    fn test_normalized_path_add_whitespaces() {
+        let l = NormalizedPath::from("foo");
+        let r = NormalizedPath::from("");
+        assert_eq!(l + r, NormalizedPath::from("foo/"));
 
-        let l = QualifiedPath::from("foo");
-        let r = QualifiedPath::from("/bar/baz");
-        assert_eq!(l + r, QualifiedPath::from("/bar/baz"));
+        let l = NormalizedPath::from("foo");
+        let r = NormalizedPath::from("/bar/baz");
+        assert_eq!(l + r, NormalizedPath::from("/bar/baz"));
     }
 
     #[test]
-    fn test_qualified_path_trim() {
-        let path = QualifiedPath::from("foo/bar");
+    fn test_normalized_path_trim() {
+        let path = NormalizedPath::from("foo/bar");
         assert_eq!(path.strip_n(0, path.len() - 1).path, vec!["foo"]);
     }
 
     #[test]
-    fn test_qualified_path_as_absolute() {
-        let path = QualifiedPath::from("foo/bar");
+    fn test_normalized_path_as_absolute() {
+        let path = NormalizedPath::from("foo/bar");
         let absolute = path.as_absolute();
         assert!(absolute.is_absolute());
         assert_eq!(absolute, "/foo/bar");
