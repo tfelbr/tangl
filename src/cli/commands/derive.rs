@@ -5,6 +5,7 @@ use crate::logging::TanglLogger;
 use crate::model::*;
 use crate::spl::*;
 use clap::{Arg, ArgAction, Command};
+use colored::Colorize;
 use std::error::Error;
 use std::fs::File;
 use std::io::Read;
@@ -17,10 +18,49 @@ const OPTIMIZE: &str = "optimize";
 const UPDATE: &str = "update";
 const FROM_FILE: &str = "from_file";
 
-pub fn fix_conflicts_hint() -> String {
+fn fix_conflicts_hint() -> String {
     format!(
-        "\nFix all conflicts, then run {} to commence the derivation.",
-        format_command_help("tangl derive --continue"),
+        "  (Fix all conflicts, then use {} to continue the derivation)",
+        format_command_help("tangl derive --continue")
+    )
+}
+
+fn continue_hint() -> String {
+    format!(
+        "  (Use {} to continue the derivation)",
+        format_command_help("tangl derive --continue")
+    )
+}
+
+fn reset_hint() -> String {
+    format!(
+        "  (Use {} to reset to the last state)",
+        format_command_help("tangl derive --reset")
+    )
+}
+
+fn abort_hint() -> String {
+    format!(
+        "  (Use {} to abort the derivation)",
+        format_command_help("tangl derive --abort")
+    )
+}
+
+pub fn normal_hint() -> String {
+    format!(
+        "  {}\n  {}\n  {}",
+        continue_hint(),
+        reset_hint(),
+        abort_hint(),
+    )
+}
+
+pub fn conflict_hint() -> String {
+    format!(
+        "  {}\n  {}\n  {}",
+        fix_conflicts_hint(),
+        reset_hint(),
+        abort_hint(),
     )
 }
 
@@ -37,12 +77,19 @@ fn initialize_hint(
             if optimize {
                 logger.info("Suggesting the following merge order:");
             }
-            logger.info(order.display_as_path());
+            for info in order.display_as_list() {
+                logger.info(format!("  {}", info));
+            }
             if order.contains_conflicts() {
-                logger.info(format!("\nExpecting {} conflicts", order.get_n_conflict()))
+                logger.info(format!(
+                    "\nExpecting {} conflict(s)",
+                    order.get_n_conflict().to_string().red()
+                ))
             } else {
                 logger.info("\nExpecting no conflicts")
             };
+            logger.info(continue_hint());
+            logger.info(abort_hint());
         }
         DerivationState::None => logger.info("Product already up to date."),
     }
@@ -52,18 +99,7 @@ fn initialize_hint(
 fn initialize_error_hint() -> Box<dyn Error> {
     let messages = vec![
         "fatal: a derivation is already in progress".to_string(),
-        format!(
-            "  (Use {} to continue the derivation)",
-            format_command_help("tangl derive --continue")
-        ),
-        format!(
-            "  (Use {} to reset to the last state)",
-            format_command_help("tangl derive --reset")
-        ),
-        format!(
-            "  (Use {} to abort the derivation)",
-            format_command_help("tangl derive --abort")
-        ),
+        normal_hint(),
     ];
     messages.join("\n").into()
 }
@@ -113,22 +149,25 @@ fn handle_continue(
             }
         })
         .collect();
-    let completed_chain = completed
-        .to_merge_chain_statistic(derivation_manager.get_product().to_normalized_path());
+    let completed_chain =
+        completed.to_merge_chain_statistic(derivation_manager.get_product().to_normalized_path());
     let still_missing: MergeChainStatistic = derivation_manager.get_pending_chain()?;
     logger.info(format!("Merged {} feature(s)", completed_chain.len() - 1));
     for complete in completed_chain.iter_except_base() {
         logger.info(format!("  {}", complete));
     }
     if !still_missing.is_empty() {
+        logger.info("\nEncountered conflicts while merging");
+        logger.info(conflict_hint());
         logger.info(format!(
             "\n{} feature(s) remain(s)",
             still_missing.get_chain().len() - 1
         ));
-        logger.info(still_missing.display_as_path());
-        logger.info(fix_conflicts_hint());
+        for info in still_missing.display_as_list() {
+            logger.info(format!("  {}", info));
+        }
     } else {
-        logger.info("\nAll features merged. Derivation complete")
+        logger.info("\nAll features merged. Derivation complete.")
     }
     Ok(())
 }
@@ -224,9 +263,7 @@ impl CommandInterface for DeriveCommand {
             .arg_helper
             .get_argument_value::<bool>(UPDATE)
             .unwrap();
-        let file_path = context
-            .arg_helper
-            .get_argument_value::<String>(FROM_FILE);
+        let file_path = context.arg_helper.get_argument_value::<String>(FROM_FILE);
 
         let features = context.git.get_model().assert_all(&all_feature_paths)?;
         let mut derivation_manager =
@@ -263,7 +300,12 @@ impl CommandInterface for DeriveCommand {
             let features = context.git.get_model().assert_all::<Feature>(&paths)?;
             let transformer = ByTypeFilteringNodePathTransformer::<_, ConcreteFeature>::new();
             let node_paths = transformer.transform(features.into_iter()).collect();
-            handle_initialize(node_paths, optimize, &mut derivation_manager, &context.logger)?;
+            handle_initialize(
+                node_paths,
+                optimize,
+                &mut derivation_manager,
+                &context.logger,
+            )?;
         } else {
             unreachable!()
         };

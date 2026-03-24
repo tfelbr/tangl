@@ -31,7 +31,7 @@ pub fn verbose() -> Arg {
 }
 
 pub fn format_command_help<S: Into<String>>(command: S) -> String {
-    command.into().yellow().to_string()
+    format!("\"{}\"", command.into())
 }
 
 pub fn delete_path<T: HasBranch>(

@@ -60,12 +60,11 @@ impl CommandRepository {
                     self.execute_recursive(context)
                 } else {
                     let ext_args: Vec<_> = sub_args.get_many::<OsString>("").unwrap().collect();
-                    let output = std::process::Command::new("git")
+                    std::process::Command::new("git")
                         .arg(sub)
                         .args(ext_args)
-                        .output()
+                        .status()
                         .expect("failed to execute git");
-                    context.logger.info(String::from_utf8_lossy(&output.stdout));
                     Ok(context)
                 }
             }

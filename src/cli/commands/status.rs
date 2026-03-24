@@ -1,6 +1,6 @@
 use crate::cli::*;
 use crate::model::{AnyHasBranch, ConcreteProduct};
-use crate::spl::{DerivationState, InspectionManager};
+use crate::spl::{DerivationManager, DerivationState, InspectionManager};
 use clap::Command;
 use colored::Colorize;
 use std::error::Error;
@@ -21,7 +21,7 @@ impl CommandInterface for StatusCommand {
     fn run_command(&self, context: &mut CommandContext) -> Result<(), Box<dyn Error>> {
         context.git.colored_output(true);
         let output = context.git.status()?;
-        let mut no_first_line = output.split("\n").collect::<Vec<_>>()[1..]
+        let no_first_line = output.split("\n").collect::<Vec<_>>()[1..]
             .to_vec()
             .join("\n")
             .trim()
@@ -40,51 +40,25 @@ impl CommandInterface for StatusCommand {
             match state.get_state() {
                 DerivationState::None => context.logger.info("No derivation in progress"),
                 DerivationState::InProgress => {
-                    context.logger.info("\nDerivation in progress");
-                    if !state.get_completed().is_empty() {
-                        context.logger.info("\nFeatures merged:");
-                        for feature in state.get_completed() {
-                            context.logger.info(format!(
-                                "    {}",
-                                feature.get_qualified_path().to_string().green()
-                            ));
-                        }
+                    context.logger.info("Derivation in progress");
+                    if no_first_line.contains("You have unmerged paths.") {
+                        context.logger.info(conflict_hint());
+                    } else {
+                        context.logger.info(normal_hint());
                     }
                     if !state.get_missing().is_empty() {
+                        let manager =
+                            DerivationManager::new(&product, &context.git, &context.logger)?;
+                        let missing = manager.get_pending_chain()?;
                         context.logger.info("\nFeatures remaining:");
-                        for feature in state.get_missing() {
-                            context.logger.info(format!(
-                                "    {}",
-                                feature.get_qualified_path().to_string().red()
-                            ));
+                        for info in missing.display_as_list() {
+                            context.logger.info(format!("  {info}"))
                         }
                     }
-                    if no_first_line.contains("You have unmerged paths.") {
-                        context.logger.info("\nCurrently merging:");
-                        context.logger.info(format!(
-                            "    {}",
-                            state
-                                .get_missing()
-                                .first()
-                                .unwrap()
-                                .get_qualified_path()
-                                .to_string()
-                                .yellow()
-                        ));
-                        no_first_line += fix_conflicts_hint().as_str();
-                    } else {
-                        no_first_line += format!(
-                            "\nRun {} to continue the derivation.",
-                            format_command_help("tangl derive --continue")
-                        )
-                        .as_str();
-                    }
-                    context.logger.info("");
                 }
             }
         };
-
-        context.logger.info(no_first_line);
+        context.logger.info(format!("\n{}", no_first_line));
         Ok(())
     }
 }

@@ -1,5 +1,6 @@
 use crate::cli::*;
-use crate::git::conflict::{ConflictChecker, MergeChainStatistics};
+use crate::git::conflict::{ConflictChecker, MergeChainStatistic, MergeChainStatistics};
+use crate::git::error::GitError;
 use crate::model::{
     AnyHasBranch, ByTypeFilteringNodePathTransformer, CommitMetadataContainer, ConcreteFeature,
     ConcreteProduct, NodePath, NodePathTransformer,
@@ -32,33 +33,55 @@ fn handle_feature(
             }
         })
         .collect();
-    let all_products = ByTypeFilteringNodePathTransformer::new()
+    let all_products: Vec<NodePath<AnyHasBranch>> = ByTypeFilteringNodePathTransformer::new()
         .transform(
             inspector
                 .find_products_containing_feature(&feature)?
                 .into_iter(),
         )
         .collect();
+
     let feature_statistics: MergeChainStatistics = checker
         .check_n_against_permutations(&vec![n.clone()], &all_features, &1)
         .collect::<Result<_, _>>()?;
+
     if feature_statistics.n_conflicts() > 0 {
         context
             .logger
-            .warn("Feature stands in conflict with other features");
+            .warn(format!(
+                "\nWarning: Feature stands in conflict with other feature(s) ({} failures, showing both directions)",
+                feature_statistics.n_conflicts().to_string().red()
+            ));
         for conflict in feature_statistics.iter_conflicts() {
-            context.logger.warn(conflict.display_as_path());
+            context
+                .logger
+                .warn(format!("  {}", conflict.display_as_path()));
         }
     }
-    let product_statistics: MergeChainStatistics = checker
-        .check_n_against_permutations(&vec![n], &all_products, &1)
+
+    let product_statistics: MergeChainStatistics = all_products
+        .iter()
+        .map(|product| {
+            checker
+                .check_permutations_against_base(
+                    &vec![n.clone()],
+                    product,
+                    1,
+                )
+                .collect::<Vec<Result<MergeChainStatistic, GitError>>>()
+        })
+        .flatten()
         .collect::<Result<_, _>>()?;
+
     if product_statistics.n_conflicts() > 0 {
         context
             .logger
-            .warn("\nFeature stands in conflict with products derived from it");
+            .warn(format!(
+                "\nWarning: Feature stands in conflict with {} product(s) derived from it",
+                product_statistics.n_conflicts().to_string().red()
+            ));
         for conflict in product_statistics.iter_conflicts() {
-            context.logger.warn(conflict.display_as_path());
+            context.logger.warn(format!("  {}", conflict.display_as_path()));
         }
     };
     Ok(None)

@@ -33,6 +33,9 @@ impl FeatureMetadata {
     pub fn get_conflicting(&self) -> bool {
         self.conflicting
     }
+    pub fn conflicting(&mut self, conflict: bool) {
+        self.conflicting = conflict;
+    }
 }
 
 pub trait ToFeatureMetadataVec {
@@ -79,10 +82,7 @@ impl ToFeatureMetadataVec for MergeChainStatistic {
 
 impl ToNormalizedPaths for Vec<FeatureMetadata> {
     fn to_normalized_paths(&self) -> Vec<NormalizedPath> {
-        self
-            .iter()
-            .map(|m| m.get_qualified_path())
-            .collect()
+        self.iter().map(|m| m.get_qualified_path()).collect()
     }
 }
 
@@ -175,9 +175,11 @@ impl DerivationData {
         let missing = old_missing
             .iter()
             .find(|m| m.get_qualified_path() == *feature);
-        if missing.is_some() {
+        if let Some(missing) = missing {
             self.missing.retain(|m| m.get_qualified_path() != *feature);
-            self.completed.push(missing.unwrap().clone())
+            let mut cloned = missing.clone();
+            cloned.conflicting(false);
+            self.completed.push(cloned)
         }
     }
     pub fn update_missing(&mut self, new_order: &MergeChainStatistic) {

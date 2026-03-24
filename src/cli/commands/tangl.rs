@@ -58,10 +58,7 @@ impl CommandInterface for TangleCommand {
     ) -> Result<Vec<String>, Box<dyn Error>> {
         match completion_helper.currently_editing() {
             Some(value) => match value.get_id().as_str() {
-                "format" => Ok(vec![
-                    "waffle".to_string(),
-                    "uvl".to_string(),
-                ]),
+                "format" => Ok(vec!["waffle".to_string(), "uvl".to_string()]),
                 _ => Ok(vec![]),
             },
             None => Ok(vec![]),

@@ -32,7 +32,7 @@ impl ModelParser {
     pub fn new(format: &ImportFormat) -> ModelParser {
         let parser = match format {
             ImportFormat::Waffle => WaffleProductParser,
-            _ => todo!()
+            _ => todo!(),
         };
         ModelParser {
             parser: Box::new(parser),
@@ -44,9 +44,7 @@ impl ModelParser {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct WaffleSchema {
-
-}
+pub struct WaffleSchema {}
 
 pub struct WaffleProductParser;
 
@@ -63,7 +61,7 @@ impl FormatParser for WaffleProductParser {
                     for p in rec_paths {
                         paths.push(path.clone() + p);
                     }
-                };
+                }
                 Ok(paths)
             } else {
                 Err("Waffle product malformed: could not create map".into())

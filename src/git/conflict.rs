@@ -62,30 +62,30 @@ impl Display for MergeStatistic {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let value: String = match self {
             Self::Base(path) => {
-                format!("{} {}", path.to_string().blue(), "(Base)")
+                format!("{} ({})", path.to_string().blue(), "Base")
             }
             Self::Success(success) => {
-                format!("{} {}", success.path.to_string().blue(), "(Ok)".green())
+                format!("{} ({})", success.path.to_string().blue(), "Ok".green())
             }
             Self::UpToDate(path) => {
-                format!("{} {}", path.to_string().blue(), "(Up to date)".green())
+                format!("{} ({})", path.to_string().blue(), "Up to date".green())
             }
             Self::Conflict(conflict) => {
                 format!(
-                    "{} {}",
+                    "{} ({})",
                     conflict.path.to_string().blue(),
-                    "(Conflict)".red()
+                    "Conflict".red()
                 )
             }
             Self::Merging(pending) => {
                 format!(
-                    "{} {}",
+                    "{} ({})",
                     pending.path.to_string().blue(),
-                    "(Merging)".yellow()
+                    "Merging".yellow()
                 )
             }
             Self::Aborted(path) => {
-                format!("{} {}", path.to_string().blue(), "(Aborted)".red())
+                format!("{} ({})", path.to_string().blue(), "Aborted".red())
             }
         };
         f.write_str(value.as_str())
@@ -166,14 +166,11 @@ impl MergeChainStatistic {
     pub fn get_chain(&self) -> &Vec<MergeStatistic> {
         &self.chain
     }
-    pub fn iter_except_base(&self) -> impl Iterator<Item=&MergeStatistic> {
-        self
-            .chain
+    pub fn iter_except_base(&self) -> impl Iterator<Item = &MergeStatistic> {
+        self.chain
             .iter()
             .enumerate()
-            .filter_map(|(i, s)| {
-                if i != 0 { Some(s) } else { None }
-            })
+            .filter_map(|(i, s)| if i != 0 { Some(s) } else { None })
     }
     pub fn get_n_merged(&self) -> usize {
         self.n_merged
@@ -202,6 +199,12 @@ impl MergeChainStatistic {
     }
     pub fn display_as_path(&self) -> String {
         self.chain.iter().map(|stat| stat.to_string()).join(" <- ")
+    }
+    pub fn display_as_list(&self) -> impl Iterator<Item = String> {
+        self.chain.iter().map(|stat| match stat {
+            MergeStatistic::Base(_) => stat.to_string(),
+            _ => format!(" <- {}", stat),
+        })
     }
 }
 
