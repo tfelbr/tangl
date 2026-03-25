@@ -33,7 +33,7 @@ impl CommandInterface for StatusCommand {
             current_path.to_string().blue()
         );
         context.logger.info(first_line);
-
+        let mut maybe_new_line = "";
         if let Some(product) = current_path.try_convert_to::<ConcreteProduct>() {
             let inspector = InspectionManager::new(&context.git);
             let state = inspector.get_last_derivation_state(&product)?;
@@ -55,10 +55,11 @@ impl CommandInterface for StatusCommand {
                             context.logger.info(format!("  {info}"))
                         }
                     }
+                    maybe_new_line = "\n";
                 }
             }
         };
-        context.logger.info(format!("\n{}", no_first_line));
+        context.logger.info(format!("{maybe_new_line}{no_first_line}"));
         Ok(())
     }
 }
