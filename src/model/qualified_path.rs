@@ -1,12 +1,60 @@
+use colored::Colorize;
 use std::fmt::{Display, Formatter};
 use std::ops::{Add, Index};
 
 const SEPARATOR: char = '/';
 
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Ord, PartialOrd)]
+pub struct CommitHash {
+    full_hash: String,
+}
+
+impl CommitHash {
+    pub fn new<S: Into<String>>(full_hash: S) -> Self {
+        CommitHash {
+            full_hash: full_hash.into(),
+        }
+    }
+    pub fn get_full_hash(&self) -> &String {
+        &self.full_hash
+    }
+    pub fn get_short_hash(&self) -> String {
+        self.full_hash[0..8].to_string()
+    }
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Ord, PartialOrd)]
+pub enum PointsTo {
+    Head,
+    Commit(CommitHash),
+    Tag(String),
+}
+
+impl PointsTo {
+    fn formatted(&self, colored: bool) -> String {
+        let info = if colored {
+            match self {
+                Self::Head => "Head".yellow(),
+                Self::Commit(c) => c.get_short_hash().yellow(),
+                Self::Tag(t) => t.yellow(),
+            }
+        } else {
+            match self {
+                Self::Head => "Head".normal(),
+                Self::Commit(c) => c.get_short_hash().normal(),
+                Self::Tag(t) => t.normal(),
+            }
+        };
+        format!(" ({info})")
+    }
+}
+
 #[derive(Clone, Debug, Hash, Eq, Ord, PartialOrd)]
 pub struct NormalizedPath {
     path: Vec<String>,
+    points_to: PointsTo,
 }
+
 impl From<String> for NormalizedPath {
     fn from(value: String) -> Self {
         let mut qualified_path = Self::new();
@@ -14,16 +62,19 @@ impl From<String> for NormalizedPath {
         qualified_path
     }
 }
+
 impl From<&String> for NormalizedPath {
     fn from(value: &String) -> Self {
         Self::from(value.to_string())
     }
 }
+
 impl From<&str> for NormalizedPath {
     fn from(value: &str) -> Self {
         Self::from(value.to_string())
     }
 }
+
 impl From<Vec<String>> for NormalizedPath {
     fn from(value: Vec<String>) -> Self {
         let mut path = Self::new();
@@ -33,20 +84,19 @@ impl From<Vec<String>> for NormalizedPath {
         path
     }
 }
+
 impl From<NormalizedPath> for String {
     fn from(value: NormalizedPath) -> Self {
         value.to_string()
     }
 }
+
 impl PartialEq for NormalizedPath {
     fn eq(&self, other: &Self) -> bool {
         self.path == other.path
     }
-
-    fn ne(&self, other: &Self) -> bool {
-        self.path != other.path
-    }
 }
+
 impl PartialEq<String> for NormalizedPath {
     fn eq(&self, other: &String) -> bool {
         self.to_string() == *other
@@ -56,6 +106,7 @@ impl PartialEq<String> for NormalizedPath {
         self.to_string() != *other
     }
 }
+
 impl PartialEq<&str> for NormalizedPath {
     fn eq(&self, other: &&str) -> bool {
         self.to_string() == *other
@@ -65,6 +116,7 @@ impl PartialEq<&str> for NormalizedPath {
         self.to_string() != *other
     }
 }
+
 impl Add for NormalizedPath {
     type Output = NormalizedPath;
 
@@ -96,14 +148,17 @@ impl Add for NormalizedPath {
                 }
             }
         }
+        new_path.set_head(rhs.points_to);
         new_path
     }
 }
+
 impl Display for NormalizedPath {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.path.join("/").as_str())
     }
 }
+
 impl Index<usize> for NormalizedPath {
     type Output = String;
 
@@ -111,11 +166,18 @@ impl Index<usize> for NormalizedPath {
         &self.path[index]
     }
 }
+
 impl NormalizedPath {
     pub fn new() -> Self {
-        Self { path: Vec::new() }
+        Self {
+            path: Vec::new(),
+            points_to: PointsTo::Head,
+        }
     }
-    pub fn to_git_branch(&self) -> String {
+    pub fn to_git_object(&self) -> String {
+        if let PointsTo::Commit(c) = &self.points_to {
+            return c.get_full_hash().to_string();
+        }
         let trimmed_path = self.trim_whitespaces();
         let path = trimmed_path.path;
         match path.len() {
@@ -125,7 +187,12 @@ impl NormalizedPath {
                     .iter()
                     .map(|x| "_".to_string() + x)
                     .collect::<Vec<_>>();
-                prefix.push(path[path.len() - 1].to_string());
+                if let PointsTo::Tag(tag) = &self.points_to {
+                    prefix.push(format!("_{}", path[path.len() - 1].to_string()));
+                    prefix.push(tag.clone());
+                } else {
+                    prefix.push(path[path.len() - 1].to_string());
+                }
                 prefix.join("/")
             }
         }
@@ -133,8 +200,23 @@ impl NormalizedPath {
     pub fn push<S: Into<String>>(&mut self, path: S) {
         let qualified_str = path.into().replace("_", "");
         for split in qualified_str.trim().split(SEPARATOR) {
-            self.path.push(split.to_lowercase());
+            if split.starts_with("t:") {
+                self.points_to = PointsTo::Tag(split.strip_prefix("t:").unwrap().to_string())
+            } else if split.starts_with("c:") {
+                self.points_to = PointsTo::Commit(CommitHash::new(
+                    split.strip_prefix("c:").unwrap().to_string(),
+                ))
+            } else {
+                self.points_to = PointsTo::Head;
+                self.path.push(split.to_lowercase());
+            }
         }
+    }
+    pub fn set_head(&mut self, head: PointsTo) {
+        self.points_to = head;
+    }
+    pub fn get_head(&self) -> &PointsTo {
+        &self.points_to
     }
     pub fn strip_n(&self, n_left: usize, n_right: usize) -> NormalizedPath {
         NormalizedPath::from(self.path[n_left..n_right].to_vec())
@@ -213,6 +295,19 @@ impl NormalizedPath {
     pub fn is_absolute(&self) -> bool {
         self.path.len() > 0 && self.first().unwrap() == ""
     }
+    pub fn formatted(&self, show_head: bool, colored: bool) -> String {
+        let base = if colored {
+            self.to_string().blue().to_string()
+        } else {
+            self.to_string()
+        };
+        let head = if show_head {
+            self.points_to.formatted(colored)
+        } else {
+            "".to_string()
+        };
+        format!("{}{}", base, head)
+    }
 }
 
 pub trait ToNormalizedPath {
@@ -259,9 +354,34 @@ mod tests {
     }
 
     #[test]
-    fn test_normalized_path_to_git_branch() {
-        assert_eq!(NormalizedPath::from("foo/bar").to_git_branch(), "_foo/bar");
-        assert_eq!(NormalizedPath::from("/foo/bar").to_git_branch(), "_foo/bar");
+    fn test_normalized_path_from_tag() {
+        let path = NormalizedPath::from("foo/bar/t:1.0.0");
+        assert_eq!(path.path, vec!["foo", "bar"]);
+        assert_eq!(path.points_to, PointsTo::Tag("1.0.0".to_string()));
+    }
+
+    #[test]
+    fn test_normalized_path_from_commit() {
+        let path = NormalizedPath::from("foo/bar/c:abcdefgh");
+        assert_eq!(path.path, vec!["foo", "bar"]);
+        assert_eq!(
+            path.points_to,
+            PointsTo::Commit(CommitHash::new("abcdefgh".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_normalized_path_to_git_object() {
+        assert_eq!(NormalizedPath::from("foo/bar").to_git_object(), "_foo/bar");
+        assert_eq!(NormalizedPath::from("/foo/bar").to_git_object(), "_foo/bar");
+        assert_eq!(
+            NormalizedPath::from("/foo/bar/c:abc").to_git_object(),
+            "abc"
+        );
+        assert_eq!(
+            NormalizedPath::from("/foo/bar/t:1.0.0").to_git_object(),
+            "_foo/_bar/1.0.0"
+        );
     }
 
     #[test]
@@ -352,5 +472,14 @@ mod tests {
         let absolute = path.as_absolute();
         assert!(absolute.is_absolute());
         assert_eq!(absolute, "/foo/bar");
+    }
+
+    #[test]
+    fn test_normalized_path_add_with_commit() {
+        let l = NormalizedPath::from("foo/bar");
+        let r = NormalizedPath::from("baz/c:abc");
+        let result = l + r;
+        assert_eq!(result.to_string(), "foo/bar/baz");
+        assert_eq!(result.points_to, PointsTo::Commit(CommitHash::new("abc")));
     }
 }

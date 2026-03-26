@@ -1,5 +1,5 @@
 use crate::cli::CommandContext;
-use crate::model::{HasBranch, NormalizedPath};
+use crate::model::{IsGitObject, NormalizedPath};
 use clap::{Arg, ArgAction};
 use colored::Colorize;
 use std::error::Error;
@@ -34,7 +34,7 @@ pub fn format_command_help<S: Into<String>>(command: S) -> String {
     format!("\"{}\"", command.into())
 }
 
-pub fn delete_path<T: HasBranch>(
+pub fn delete_path<T: IsGitObject>(
     path: &NormalizedPath,
     context: &mut CommandContext,
 ) -> Result<(), Box<dyn Error>> {

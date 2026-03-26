@@ -59,7 +59,9 @@ impl CommandInterface for StatusCommand {
                 }
             }
         };
-        context.logger.info(format!("{maybe_new_line}{no_first_line}"));
+        context
+            .logger
+            .info(format!("{maybe_new_line}{no_first_line}"));
         Ok(())
     }
 }

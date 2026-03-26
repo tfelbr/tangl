@@ -54,7 +54,7 @@ impl<'a> InspectionManager<'a> {
                 .into()),
             }
         }
-        let last_commit = self.git.get_last_commit(product)?;
+        let last_commit = self.git.get_commit(product)?;
         get_last_commit(&last_commit, &self.git)
     }
 
@@ -66,7 +66,7 @@ impl<'a> InspectionManager<'a> {
         if let Some(last_commit) = last_commit {
             Ok(last_commit.get_metadata().get_data().unwrap().clone())
         } else {
-            let current_commit = self.git.get_last_commit(product)?;
+            let current_commit = self.git.get_commit(product)?;
             Ok(DerivationData::new_initial(
                 current_commit.get_hash().clone(),
             ))

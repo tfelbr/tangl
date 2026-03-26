@@ -363,7 +363,7 @@ impl<'a> DerivationManager<'a> {
             &self.product.try_convert_to().unwrap(),
         )?;
         let new_order = if optimize_order {
-            matrix.calculate_best_path_greedy(&self.product.to_normalized_path())
+            matrix.estimate_best_path(&self.product.to_normalized_path())
         } else {
             let mut with_base = vec![self.product.to_normalized_path()];
             let paths: Vec<NormalizedPath> = order.iter().map(|p| p.to_normalized_path()).collect();
@@ -384,7 +384,7 @@ impl<'a> DerivationManager<'a> {
                 let transformed = transformer.transform(features.into_iter()).collect();
                 let chain = self.predict_conflicts(&transformed, optimize)?;
                 if !chain.all_up_to_date() {
-                    let current_commit = self.git.get_last_commit(&self.product)?;
+                    let current_commit = self.git.get_commit(&self.product)?;
                     let new_data = DerivationData::new_in_progress(
                         chain.to_feature_metadata_vec(),
                         current_commit.get_hash(),

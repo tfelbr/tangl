@@ -12,7 +12,7 @@ pub trait SymbolicNodeType: Clone + Debug {
 
 pub trait HasFeatureChildren: SymbolicNodeType {}
 pub trait HasProductChildren: SymbolicNodeType {}
-pub trait HasBranch: SymbolicNodeType {}
+pub trait IsGitObject: SymbolicNodeType {}
 pub trait IsOnOrUnderArea: SymbolicNodeType {}
 
 #[derive(Clone, Debug)]
@@ -30,7 +30,7 @@ impl SymbolicNodeType for ConcreteFeature {
     }
 }
 impl HasFeatureChildren for ConcreteFeature {}
-impl HasBranch for ConcreteFeature {}
+impl IsGitObject for ConcreteFeature {}
 impl IsOnOrUnderArea for ConcreteFeature {}
 
 #[derive(Clone, Debug)]
@@ -99,7 +99,7 @@ impl SymbolicNodeType for ConcreteProduct {
     }
 }
 impl HasProductChildren for ConcreteProduct {}
-impl HasBranch for ConcreteProduct {}
+impl IsGitObject for ConcreteProduct {}
 impl IsOnOrUnderArea for ConcreteProduct {}
 
 #[derive(Clone, Debug)]
@@ -167,7 +167,7 @@ impl SymbolicNodeType for ConcreteArea {
         }
     }
 }
-impl HasBranch for ConcreteArea {}
+impl IsGitObject for ConcreteArea {}
 impl IsOnOrUnderArea for ConcreteArea {}
 
 #[derive(Clone, Debug)]
@@ -226,7 +226,7 @@ impl SymbolicNodeType for AnyHasBranch {
         }
     }
 }
-impl HasBranch for AnyHasBranch {}
+impl IsGitObject for AnyHasBranch {}
 
 #[derive(Clone, Debug)]
 pub enum NodeType {

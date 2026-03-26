@@ -63,25 +63,21 @@ fn handle_feature(
         .iter()
         .map(|product| {
             checker
-                .check_permutations_against_base(
-                    &vec![n.clone()],
-                    product,
-                    1,
-                )
+                .check_permutations_against_base(&vec![n.clone()], product, 1)
                 .collect::<Vec<Result<MergeChainStatistic, GitError>>>()
         })
         .flatten()
         .collect::<Result<_, _>>()?;
 
     if product_statistics.n_conflicts() > 0 {
-        context
-            .logger
-            .warn(format!(
-                "\nWarning: Feature stands in conflict with {} product(s) derived from it",
-                product_statistics.n_conflicts().to_string().red()
-            ));
+        context.logger.warn(format!(
+            "\nWarning: Feature stands in conflict with {} product(s) derived from it",
+            product_statistics.n_conflicts().to_string().red()
+        ));
         for conflict in product_statistics.iter_conflicts() {
-            context.logger.warn(format!("  {}", conflict.display_as_path()));
+            context
+                .logger
+                .warn(format!("  {}", conflict.display_as_path()));
         }
     };
     Ok(None)

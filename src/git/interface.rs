@@ -160,7 +160,7 @@ impl GitInterface {
         Ok(base)
     }
 
-    pub fn assert_current_node_path<T: HasBranch>(
+    pub fn assert_current_node_path<T: IsGitObject>(
         &self,
     ) -> Result<NodePath<T>, GitWrongNodeTypeError> {
         let current_qualified_path = self.get_current_qualified_path()?;
@@ -197,18 +197,18 @@ impl GitInterface {
     }
 
     pub(super) fn checkout_raw(&self, path: &NormalizedPath) -> Result<String, GitError> {
-        let branch = path.to_git_branch();
+        let branch = path.to_git_object();
         let command = vec!["checkout", branch.as_str()];
         let out = self.raw_git_interface.run(&command)?;
         Ok(output_to_result(out, &command)?)
     }
 
-    pub fn checkout<T: HasBranch>(&self, path: &NodePath<T>) -> Result<String, GitError> {
+    pub fn checkout<T: IsGitObject>(&self, path: &NodePath<T>) -> Result<String, GitError> {
         self.checkout_raw(&path.to_normalized_path())
     }
 
     pub(super) fn create_branch_no_mut(&self, path: &NormalizedPath) -> Result<String, GitError> {
-        let branch = path.to_git_branch();
+        let branch = path.to_git_object();
         let command = vec!["branch", branch.as_str()];
         Ok(output_to_result(
             self.raw_git_interface.run(&command)?,
@@ -234,21 +234,29 @@ impl GitInterface {
     }
 
     pub(super) fn delete_branch_no_mut(&self, path: &NormalizedPath) -> Result<String, GitError> {
-        let branch = path.to_git_branch();
+        let branch = path.to_git_object();
         let command = vec!["branch", "-D", branch.as_str()];
         let out = self.raw_git_interface.run(&command)?;
         Ok(output_to_result(out, &command)?)
     }
 
-    pub fn delete_branch<T: HasBranch>(&mut self, path: NodePath<T>) -> Result<String, GitError> {
+    pub fn delete_branch<T: IsGitObject>(&mut self, path: NodePath<T>) -> Result<String, GitError> {
         self.delete_branch_no_mut(&path.to_normalized_path())
     }
 
-    pub fn merge<T: HasBranch>(
+    pub fn merge<T: IsGitObject>(
         &self,
         path: &NodePath<T>,
     ) -> Result<(MergeChainStatistic, String), GitError> {
-        let branch = path.to_normalized_path().to_git_branch();
+        let path = if let PointsTo::Head = path.get_head() {
+            let commit = self.get_commit(&path)?;
+            let mut new_path = path.clone();
+            new_path.update_head(PointsTo::Commit(CommitHash::new(commit.get_hash())));
+            new_path
+        } else {
+            path.clone()
+        };
+        let branch = path.to_normalized_path().to_git_object();
         let command = vec!["merge", branch.as_str()];
         let out = self.raw_git_interface.run(&command)?;
         let result = if out.status.success() {
@@ -307,14 +315,14 @@ impl GitInterface {
         Ok(Commit::new(h, message))
     }
 
-    pub fn iter_commit_history<T: HasBranch>(
+    pub fn iter_commit_history<T: IsGitObject>(
         &self,
-        branch: &NodePath<T>,
+        path: &NodePath<T>,
         n: i32,
     ) -> Result<CommitIterator, GitError> {
         let n_str = n.to_string();
-        let branch = branch.to_normalized_path().to_git_branch();
-        let command = vec!["log", "-n", n_str.as_str(), "--format=%H", branch.as_str()];
+        let object = path.to_normalized_path().to_git_object();
+        let command = vec!["log", "-n", n_str.as_str(), "--format=%H", object.as_str()];
         let out = self.raw_git_interface.run(&command)?;
         let raw_hashes = output_to_result(out, &command)?.trim().to_string();
         let all_hashes = raw_hashes
@@ -324,7 +332,7 @@ impl GitInterface {
         Ok(CommitIterator::new(all_hashes, &self))
     }
 
-    pub fn get_last_commit<T: HasBranch>(&self, branch: &NodePath<T>) -> Result<Commit, GitError> {
+    pub fn get_commit<T: IsGitObject>(&self, branch: &NodePath<T>) -> Result<Commit, GitError> {
         let iterator = self.iter_commit_history(&branch, 1)?;
         let mut commits: Vec<Commit> = vec![];
         for commit in iterator {
@@ -333,11 +341,11 @@ impl GitInterface {
         Ok(commits[0].clone())
     }
 
-    pub fn get_files_managed_by_branch<T: HasBranch>(
+    pub fn get_files_managed_by_branch<T: IsGitObject>(
         &self,
         branch: &NodePath<T>,
     ) -> Result<Vec<String>, GitError> {
-        let branch = branch.to_normalized_path().to_git_branch();
+        let branch = branch.to_normalized_path().to_git_object();
         let command = vec!["ls-tree", "-r", "--name-only", branch.as_str()];
         let out = self.raw_git_interface.run(&command)?;
         let message = output_to_result(out, &command)?;

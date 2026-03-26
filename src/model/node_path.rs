@@ -9,6 +9,7 @@ use std::rc::Rc;
 pub struct NodePath<T: SymbolicNodeType> {
     path: Vec<Rc<Node>>,
     unknown_mode: bool,
+    points_to: PointsTo,
     _phantom: PhantomData<T>,
 }
 
@@ -40,19 +41,31 @@ impl<T: HasProductChildren> NodePath<T> {
 
 impl<T: IsOnOrUnderArea> NodePath<T> {
     pub fn move_to_area(self) -> NodePath<ConcreteArea> {
-        let path = self.path[..2].to_vec();
-        NodePath::<ConcreteArea>::new(path, self.unknown_mode)
+        self.move_to_index(1).try_convert_to().unwrap()
+    }
+}
+
+impl<T: IsGitObject> NodePath<T> {
+    pub fn get_head(&self) -> &PointsTo {
+        &self.points_to
+    }
+    pub fn update_head(&mut self, head: PointsTo) {
+        self.points_to = head;
     }
 }
 
 impl NodePath<AnyNode> {
     pub fn from_concrete<T: SymbolicNodeType>(other: &NodePath<T>) -> Self {
-        Self::new(other.path.clone(), other.unknown_mode)
+        Self::new(
+            other.path.clone(),
+            other.unknown_mode,
+            other.points_to.clone(),
+        )
     }
 }
 
 impl NodePath<VirtualRoot> {
-    pub fn to_area(self, area: &NormalizedPath) -> Option<NodePath<ConcreteArea>> {
+    pub fn move_to_area(self, area: &NormalizedPath) -> Option<NodePath<ConcreteArea>> {
         self.move_to(area)?.try_convert_to()
     }
 }
@@ -69,6 +82,7 @@ impl NodePath<ConcreteArea> {
             Some(NodePath::<FeatureRoot>::new(
                 vec![self.path[0].clone()],
                 self.unknown_mode,
+                PointsTo::Head,
             ))
         } else {
             self.move_to(&NormalizedPath::from(FEATURES_PREFIX))?
@@ -80,6 +94,7 @@ impl NodePath<ConcreteArea> {
             Some(NodePath::<ProductRoot>::new(
                 vec![self.path[0].clone()],
                 self.unknown_mode,
+                PointsTo::Head,
             ))
         } else {
             self.move_to(&NormalizedPath::from(PRODUCTS_PREFIX))?
@@ -94,6 +109,7 @@ impl<T: SymbolicNodeType> ToNormalizedPath for NodePath<T> {
         for p in self.path.iter() {
             path.push(p.get_name());
         }
+        path.set_head(self.points_to.clone());
         path
     }
 }
@@ -102,17 +118,22 @@ impl<T: SymbolicNodeType> NodePath<T> {
     fn get_node(&self) -> &Node {
         self.path.last().unwrap()
     }
-    pub fn new(path: Vec<Rc<Node>>, unknown_mode: bool) -> NodePath<T> {
+    pub fn new(path: Vec<Rc<Node>>, unknown_mode: bool, head: PointsTo) -> NodePath<T> {
         Self {
             path,
             unknown_mode,
+            points_to: head,
             _phantom: PhantomData,
         }
     }
     pub fn try_convert_to<To: SymbolicNodeType>(&self) -> Option<NodePath<To>> {
         let compatible = self.unknown_mode || To::is_compatible(self.get_node().get_type());
         if compatible {
-            Some(NodePath::<To>::new(self.path.clone(), self.unknown_mode))
+            Some(NodePath::<To>::new(
+                self.path.clone(),
+                self.unknown_mode,
+                self.points_to.clone(),
+            ))
         } else {
             None
         }
@@ -121,9 +142,16 @@ impl<T: SymbolicNodeType> NodePath<T> {
         for p in path.iter_string() {
             self.path.push(self.get_node().get_child(p)?.clone());
         }
-        Some(NodePath::<AnyNode>::new(self.path, self.unknown_mode))
+        Some(NodePath::<AnyNode>::new(
+            self.path,
+            self.unknown_mode,
+            path.get_head().clone(),
+        ))
     }
-
+    pub fn move_to_index(self, index: usize) -> NodePath<AnyNode> {
+        let path = self.path[0..index + 1].to_vec();
+        NodePath::<AnyNode>::new(path, self.unknown_mode, PointsTo::Head)
+    }
     pub fn move_to_last_valid(self, path: &NormalizedPath) -> NodePath<AnyNode> {
         let mut current = self.as_any_type();
         for part in path.iter() {

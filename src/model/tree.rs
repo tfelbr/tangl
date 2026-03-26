@@ -38,10 +38,14 @@ impl TreeDataModel {
         node_type
     }
     pub fn get_area(&self, path: &NormalizedPath) -> Option<NodePath<ConcreteArea>> {
-        self.get_virtual_root().to_area(path)
+        self.get_virtual_root().move_to_area(path)
     }
     pub fn get_virtual_root(&self) -> NodePath<VirtualRoot> {
-        NodePath::<VirtualRoot>::new(vec![self.virtual_root.clone()], self.unknowns_exist)
+        NodePath::<VirtualRoot>::new(
+            vec![self.virtual_root.clone()],
+            self.unknowns_exist,
+            PointsTo::Head,
+        )
     }
     pub fn get_node_path<T: SymbolicNodeType>(&self, path: &NormalizedPath) -> Option<NodePath<T>> {
         let initial_path = self.get_virtual_root();
