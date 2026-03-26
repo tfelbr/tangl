@@ -1,10 +1,11 @@
 use colored::Colorize;
 use std::fmt::{Display, Formatter};
 use std::ops::{Add, Index};
+use serde::{Deserialize, Serialize};
 
 const SEPARATOR: char = '/';
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct CommitHash {
     full_hash: String,
 }
@@ -23,7 +24,7 @@ impl CommitHash {
     }
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum PointsTo {
     Head,
     Commit(CommitHash),
@@ -49,7 +50,7 @@ impl PointsTo {
     }
 }
 
-#[derive(Clone, Debug, Hash, Eq, Ord, PartialOrd)]
+#[derive(Clone, Debug, Hash, Eq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct NormalizedPath {
     path: Vec<String>,
     points_to: PointsTo,

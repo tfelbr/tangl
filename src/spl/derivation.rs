@@ -1,7 +1,4 @@
-use crate::git::conflict::{
-    ConflictAnalyzer, ConflictChecker, MergeChainStatistic, MergeConflict, MergePending,
-    MergeStatistic, MergeSuccess,
-};
+use crate::git::conflict::{ConflictAnalyzer, ConflictChecker, MergeChainStatistic, MergePending, MergeStatistic, MergeSuccess};
 use crate::git::error::{GitError, GitModelError, GitSerdeError};
 use crate::git::interface::GitInterface;
 use crate::logging::TanglLogger;
@@ -16,76 +13,6 @@ use std::fmt::{Display, Formatter};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct FeatureMetadata {
-    path: String,
-    conflicting: bool,
-}
-impl FeatureMetadata {
-    pub fn new<S: Into<String>>(path: S, conflicting: bool) -> Self {
-        Self {
-            path: path.into(),
-            conflicting,
-        }
-    }
-    pub fn get_qualified_path(&self) -> NormalizedPath {
-        NormalizedPath::from(&self.path)
-    }
-    pub fn get_conflicting(&self) -> bool {
-        self.conflicting
-    }
-    pub fn conflicting(&mut self, conflict: bool) {
-        self.conflicting = conflict;
-    }
-}
-
-pub trait ToFeatureMetadataVec {
-    fn to_feature_metadata_vec(&self) -> Vec<FeatureMetadata>;
-}
-
-pub trait ToMergeChainStatistic {
-    fn to_merge_chain_statistic(&self, base: NormalizedPath) -> MergeChainStatistic;
-}
-
-impl ToMergeChainStatistic for Vec<FeatureMetadata> {
-    fn to_merge_chain_statistic(&self, product: NormalizedPath) -> MergeChainStatistic {
-        let mut statistic = MergeChainStatistic::new();
-        statistic.push(MergeStatistic::Base(product));
-        for value in self {
-            let s = if !value.get_conflicting() {
-                let success = MergeSuccess::new(value.get_qualified_path());
-                MergeStatistic::Success(success)
-            } else {
-                let conflict = MergeConflict::new(value.get_qualified_path());
-                MergeStatistic::Conflict(conflict)
-            };
-            statistic.push(s)
-        }
-        statistic
-    }
-}
-
-impl ToFeatureMetadataVec for MergeChainStatistic {
-    fn to_feature_metadata_vec(&self) -> Vec<FeatureMetadata> {
-        self.get_chain()
-            .iter()
-            .filter_map(|s| {
-                let conflicting = match s {
-                    MergeStatistic::Base(_) => return None,
-                    MergeStatistic::Success(_) => false,
-                    _ => true,
-                };
-                Some(FeatureMetadata::new(s.get_path().to_string(), conflicting))
-            })
-            .collect()
-    }
-}
-
-impl ToNormalizedPaths for Vec<FeatureMetadata> {
-    fn to_normalized_paths(&self) -> Vec<NormalizedPath> {
-        self.iter().map(|m| m.get_qualified_path()).collect()
-    }
-}
-
 pub enum DerivationState {
     InProgress,
     None,
@@ -99,29 +26,19 @@ impl Display for DerivationState {
         f.write_str(out)
     }
 }
-impl DerivationState {
-    pub fn from_string<S: Into<String>>(from: S) -> Self {
-        let real = from.into();
-        if real == "in_progress" {
-            Self::InProgress
-        } else {
-            Self::None
-        }
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DerivationData {
     id: String,
-    state: String,
+    state: DerivationState,
     initial_commit: String,
-    completed: Vec<FeatureMetadata>,
-    missing: Vec<FeatureMetadata>,
-    total: Vec<FeatureMetadata>,
+    completed: Vec<MergeStatistic>,
+    missing: Vec<MergeStatistic>,
+    total: Vec<MergeStatistic>,
 }
 impl DerivationData {
     pub fn new_in_progress<S: Into<String>>(
-        features: Vec<FeatureMetadata>,
+        features: Vec<MergeStatistic>,
         initial_commit: S,
         previously_finished: &Self,
     ) -> Self {
@@ -145,7 +62,7 @@ impl DerivationData {
                 Self {
                     id: uuid.to_string(),
                     initial_commit: initial_commit.into(),
-                    state: DerivationState::InProgress.to_string(),
+                    state: DerivationState::InProgress,
                     completed: vec![],
                     missing: features.clone(),
                     total,
@@ -158,44 +75,43 @@ impl DerivationData {
         Self {
             id: uuid.to_string(),
             initial_commit: initial_commit.into(),
-            state: DerivationState::None.to_string(),
+            state: DerivationState::None,
             completed: vec![],
             missing: vec![],
             total: vec![],
         }
     }
     pub fn as_none(&mut self) {
-        self.state = DerivationState::None.to_string();
+        self.state = DerivationState::None;
     }
     pub fn as_in_progress(&mut self) {
-        self.state = DerivationState::InProgress.to_string();
+        self.state = DerivationState::InProgress;
     }
     pub fn mark_as_completed(&mut self, feature: &NormalizedPath) {
-        let old_missing: Vec<FeatureMetadata> = self.missing.clone();
+        let old_missing = self.missing.clone();
         let missing = old_missing
             .iter()
-            .find(|m| m.get_qualified_path() == *feature);
+            .find(|m| m.get_path() == feature);
         if let Some(missing) = missing {
-            self.missing.retain(|m| m.get_qualified_path() != *feature);
-            let mut cloned = missing.clone();
-            cloned.conflicting(false);
-            self.completed.push(cloned)
+            self.missing.retain(|m| m.get_path() != feature);
+            let new = MergeStatistic::Success(MergeSuccess::new(missing.get_path().clone()));
+            self.completed.push(new)
         }
     }
     pub fn update_missing(&mut self, new_order: &MergeChainStatistic) {
-        self.missing = new_order.to_feature_metadata_vec();
+        self.missing = new_order.iter_except_base().cloned().collect();
     }
-    pub fn get_completed(&self) -> &Vec<FeatureMetadata> {
+    pub fn get_completed(&self) -> &Vec<MergeStatistic> {
         &self.completed
     }
-    pub fn get_missing(&self) -> &Vec<FeatureMetadata> {
+    pub fn get_missing(&self) -> &Vec<MergeStatistic> {
         &self.missing
     }
-    pub fn get_total(&self) -> &Vec<FeatureMetadata> {
+    pub fn get_total(&self) -> &Vec<MergeStatistic> {
         &self.total
     }
-    pub fn get_state(&self) -> DerivationState {
-        DerivationState::from_string(&self.state)
+    pub fn get_state(&self) -> &DerivationState {
+        &self.state
     }
     pub fn get_id(&self) -> &String {
         &self.id
@@ -334,10 +250,9 @@ impl<'a> DerivationManager<'a> {
         let chain = if self.current_state.get_missing().len() == 0 {
             MergeChainStatistic::new()
         } else {
-            let mut chain: MergeChainStatistic = self
-                .current_state
-                .get_missing()
-                .to_merge_chain_statistic(self.product.to_normalized_path());
+            let mut chain = MergeChainStatistic::new();
+            chain.push(MergeStatistic::Base(self.product.to_normalized_path()));
+            chain.fill(self.current_state.missing.clone());
             if self.git.pending_merge()? {
                 let second = chain.remove(1);
                 let merging = MergeStatistic::Merging(MergePending::new(second.get_path().clone()));
@@ -386,7 +301,7 @@ impl<'a> DerivationManager<'a> {
                 if !chain.all_up_to_date() {
                     let current_commit = self.git.get_commit(&self.product)?;
                     let new_data = DerivationData::new_in_progress(
-                        chain.to_feature_metadata_vec(),
+                        chain.iter_except_base().cloned().collect(),
                         current_commit.get_hash(),
                         &self.current_state,
                     );
@@ -421,10 +336,7 @@ impl<'a> DerivationManager<'a> {
     }
 
     pub fn optimize_merge_order(&mut self) -> Result<MergeChainStatistic, Box<dyn Error>> {
-        let old_order: MergeChainStatistic = self
-            .current_state
-            .get_missing()
-            .to_merge_chain_statistic(self.product.to_normalized_path());
+        let old_order = self.get_pending_chain()?;
         let missing: Vec<NormalizedPath> = self.current_state.get_missing().to_normalized_paths();
         let features = self.git.get_model().assert_all(&missing)?;
         let new_order = self.predict_conflicts(&features, true)?;

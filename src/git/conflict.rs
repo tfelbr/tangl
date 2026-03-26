@@ -1,14 +1,15 @@
 use crate::git::error::GitError;
 use crate::git::interface::GitInterface;
 use crate::logging::TanglLogger;
-use crate::model::{AnyHasBranch, NodePath, NormalizedPath, ToNormalizedPath};
+use crate::model::{AnyHasBranch, NodePath, NormalizedPath, ToNormalizedPath, ToNormalizedPaths};
 use colored::Colorize;
 use itertools::Itertools;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MergeSuccess {
     path: NormalizedPath,
 }
@@ -18,7 +19,7 @@ impl MergeSuccess {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MergePending {
     path: NormalizedPath,
 }
@@ -28,7 +29,7 @@ impl MergePending {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MergeConflict {
     path: NormalizedPath,
 }
@@ -38,7 +39,7 @@ impl MergeConflict {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum MergeStatistic {
     Base(NormalizedPath),
     Success(MergeSuccess),
@@ -93,22 +94,18 @@ impl Display for MergeStatistic {
     }
 }
 
+impl ToNormalizedPaths for Vec<MergeStatistic> {
+    fn to_normalized_paths(&self) -> Vec<NormalizedPath> {
+        self.iter().map(|s| s.get_path().clone()).collect()
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct MergeChainStatistic {
     chain: Vec<MergeStatistic>,
     n_merged: usize,
     n_up_to_date: usize,
     n_conflict: usize,
-}
-
-impl From<Vec<MergeStatistic>> for MergeChainStatistic {
-    fn from(value: Vec<MergeStatistic>) -> Self {
-        let mut new = Self::new();
-        for v in value {
-            new.push(v)
-        }
-        new
-    }
 }
 
 impl MergeChainStatistic {
@@ -147,6 +144,11 @@ impl MergeChainStatistic {
         }
         self.add_to_internal_counters(&stat);
         self.chain.push(stat);
+    }
+    pub fn fill(&mut self, stats: Vec<MergeStatistic>) {
+        for stat in stats {
+            self.chain.push(stat)
+        }
     }
     pub fn insert(&mut self, index: usize, stat: MergeStatistic) {
         self.add_to_internal_counters(&stat);
@@ -208,6 +210,7 @@ impl MergeChainStatistic {
         })
     }
 }
+
 
 pub struct MergeChainStatistics {
     statistics: Vec<MergeChainStatistic>,
