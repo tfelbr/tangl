@@ -4,23 +4,49 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::rc::Rc;
+use serde::{Deserialize, Serialize};
 use termtree::Tree;
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
+pub struct CommitHash {
+    full_hash: String,
+}
+
+impl CommitHash {
+    pub fn new<S: Into<String>>(full_hash: S) -> Self {
+        CommitHash {
+            full_hash: full_hash.into(),
+        }
+    }
+    pub fn get_full_hash(&self) -> &String {
+        &self.full_hash
+    }
+    pub fn get_short_hash(&self) -> String {
+        self.full_hash[0..8].to_string()
+    }
+}
+
 
 #[derive(Clone, Debug)]
 pub struct NodeMetadata {
-    has_branch: bool,
+    branch: Option<String>,
+    head: Option<CommitHash>,
 }
 impl NodeMetadata {
-    pub fn new(has_branch: bool) -> Self {
-        Self { has_branch }
+    pub fn new(branch: Option<String>, head: Option<CommitHash>) -> Self {
+        Self { branch, head }
     }
-    pub fn default() -> Self {
-        let i = "".to_string();
-        drop(i);
-        Self { has_branch: false }
+    pub fn empty() -> Self {
+        Self { branch: None, head: None }
     }
     pub fn has_branch(&self) -> bool {
-        self.has_branch
+        self.branch.is_some()
+    }
+    pub fn get_branch(&self) -> Option<&String> {
+        self.branch.as_ref()
+    }
+    pub fn get_head(&self) -> Option<&CommitHash> {
+        self.head.as_ref()
     }
 }
 
@@ -49,7 +75,7 @@ impl Node {
     }
     fn build_display_tree(&self, show_tags: bool) -> Tree<String> {
         let mut formatted = ColoredString::from(self.name.clone());
-        if self.metadata.has_branch {
+        if self.metadata.has_branch() {
             formatted = formatted.blue()
         }
         let type_display = match self.node_type {
@@ -170,7 +196,7 @@ impl Node {
                 let next_child = match self.get_child_mut(&name) {
                     Some(node) => node,
                     None => {
-                        self.add_child(name.clone(), NodeMetadata::default(), false);
+                        self.add_child(name.clone(), NodeMetadata::empty(), false);
                         self.get_child_mut(&name).unwrap()
                     }
                 };
@@ -223,15 +249,15 @@ mod tests {
     use super::*;
 
     fn prepare_node() -> Node {
-        let mut node = Node::new("root", NodeType::ConcreteFeature, NodeMetadata::default());
+        let mut node = Node::new("root", NodeType::ConcreteFeature, NodeMetadata::empty());
         node.insert_node_path(
             &NormalizedPath::from("foo/f1"),
-            NodeMetadata::default(),
+            NodeMetadata::empty(),
             false,
         );
         node.insert_node_path(
             &NormalizedPath::from("bar/b1"),
-            NodeMetadata::default(),
+            NodeMetadata::empty(),
             false,
         );
         node
@@ -239,7 +265,7 @@ mod tests {
 
     #[test]
     fn test_get_qualified_paths_by() {
-        let predicate = |_: &i32, node: &Node| -> bool { !node.get_metadata().has_branch };
+        let predicate = |_: &i32, node: &Node| -> bool { !node.get_metadata().has_branch() };
         let node = prepare_node();
         let result = node
             .get_qualified_paths_by(&NormalizedPath::new(), &predicate, &vec![0])

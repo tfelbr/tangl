@@ -17,13 +17,17 @@ impl TreeDataModel {
             virtual_root: Rc::new(Node::new(
                 "",
                 NodeType::VirtualRoot,
-                NodeMetadata::default(),
+                NodeMetadata::empty(),
             )),
             qualified_paths_with_branch: vec![],
             unknowns_exist: false,
         }
     }
-    pub fn insert_qualified_path(&mut self, path: NormalizedPath, is_tag: bool) -> NodeType {
+    pub fn insert_git_object(
+        &mut self, 
+        path: NormalizedPath, 
+        is_tag: bool
+    ) -> NodeType {
         if !path.is_absolute() {
             panic!("To insert a path, it must be absolute");
         }
@@ -100,7 +104,7 @@ mod tests {
     #[test]
     fn tree_node_path_with_virtual_root() {
         let mut tree = TreeDataModel::new();
-        tree.insert_qualified_path(NormalizedPath::from("/main"), false);
+        tree.insert_git_object(NormalizedPath::from("/main"), false);
         let path = tree
             .get_node_path::<AnyNode>(&NormalizedPath::from("/main"))
             .unwrap();

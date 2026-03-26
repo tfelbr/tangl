@@ -4,6 +4,7 @@ use crate::model::*;
 use std::io;
 use std::path::PathBuf;
 use std::process::{Command, Output};
+use itertools::Itertools;
 
 fn output_to_result(output: Output, command: &Vec<&str>) -> Result<String, GitCommandError> {
     let stdout = String::from_utf8(output.stdout).unwrap().trim().to_string();
@@ -113,18 +114,21 @@ impl GitInterface {
     }
 
     fn update_complete_model(&mut self) -> Result<(), io::Error> {
-        let branch_command = vec!["branch"];
+        let branch_command = vec!["branch", "--format='%(refname:short) (%objectname)'"];
         let branch_output = self.raw_git_interface.run(&branch_command)?;
-        let all_branches: Vec<String> = String::from_utf8(branch_output.stdout)
+        let all_branches: Vec<(String, String)> = String::from_utf8(branch_output.stdout)
             .unwrap()
             .split("\n")
-            .map(|raw_string| raw_string.replace("*", ""))
+            .map(|raw_string| {
+                let split = raw_string.split(" ").collect::<Vec<&str>>();
+                (split[0].to_string(), split[1].to_string())
+            })
             .collect();
-        for branch in all_branches {
+        for (branch, commit) in all_branches {
             if !branch.is_empty() {
                 let mut path = NormalizedPath::from("");
                 path.push(branch);
-                self.model.insert_qualified_path(path, false);
+                self.model.insert_git_object(path, false);
             }
         }
         let tag_command = vec!["tag"];
@@ -138,13 +142,13 @@ impl GitInterface {
             if !tag.is_empty() {
                 let mut path = NormalizedPath::from("");
                 path.push(tag);
-                self.model.insert_qualified_path(path, true);
+                self.model.insert_git_object(path, true);
             }
         }
         Ok(())
     }
 
-    pub fn get_model(&self) -> &TreeDataModel {
+    fn get_model(&self) -> &TreeDataModel {
         &self.model
     }
 
@@ -158,6 +162,11 @@ impl GitInterface {
         let mut base = NormalizedPath::from("");
         base.push(self.get_current_branch()?);
         Ok(base)
+    }
+
+    pub fn assert_path<T: SymbolicNodeType>(&self, path: &NormalizedPath) -> Result<NodePath<T>, ModelError> {
+        let node_path = self.get_model().assert_path::<T>(path)?;
+        Ok(node_path)
     }
 
     pub fn assert_current_node_path<T: IsGitObject>(
@@ -220,7 +229,7 @@ impl GitInterface {
         &mut self,
         path: &NormalizedPath,
     ) -> Result<NodePath<T>, GitWrongNodeTypeError> {
-        let node_type = self.model.insert_qualified_path(path.clone(), false);
+        let node_type = self.model.insert_git_object(path.clone(), false);
         if !T::is_compatible(&node_type) {
             let message = format!(
                 "Expected to create branch of type '{}', but it would be of type '{}'",

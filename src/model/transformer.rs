@@ -192,8 +192,8 @@ mod tests {
 
     fn prepare_model() -> TreeDataModel {
         let mut model = TreeDataModel::new();
-        model.insert_qualified_path(NormalizedPath::from("/main/feature/root"), false);
-        model.insert_qualified_path(NormalizedPath::from("/main/feature/root/foo"), false);
+        model.insert_git_object(NormalizedPath::from("/main/feature/root"), false);
+        model.insert_git_object(NormalizedPath::from("/main/feature/root/foo"), false);
         model
     }
 

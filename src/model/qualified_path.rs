@@ -6,25 +6,6 @@ use serde::{Deserialize, Serialize};
 const SEPARATOR: char = '/';
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
-pub struct CommitHash {
-    full_hash: String,
-}
-
-impl CommitHash {
-    pub fn new<S: Into<String>>(full_hash: S) -> Self {
-        CommitHash {
-            full_hash: full_hash.into(),
-        }
-    }
-    pub fn get_full_hash(&self) -> &String {
-        &self.full_hash
-    }
-    pub fn get_short_hash(&self) -> String {
-        self.full_hash[0..8].to_string()
-    }
-}
-
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum PointsTo {
     Head,
     Commit(CommitHash),
