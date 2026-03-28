@@ -102,10 +102,7 @@ impl<T: IsGitObject> NodePath<T> {
     }
     pub fn get_object(&self) -> String {
         match &self.points_to {
-            PointsTo::Head => self
-                .get_head()
-                .get_full_hash()
-                .clone(),
+            PointsTo::Head => self.get_head().get_full_hash().clone(),
             PointsTo::Commit(hash) => hash.get_full_hash().clone(),
             PointsTo::Tag(tag) => tag.clone(),
         }
@@ -114,7 +111,9 @@ impl<T: IsGitObject> NodePath<T> {
         match &self.points_to {
             PointsTo::Head => self.get_object(),
             PointsTo::Commit(_) => self.get_object(),
-            PointsTo::Tag(_) => { todo!() },
+            PointsTo::Tag(_) => {
+                todo!()
+            }
         }
     }
     pub fn get_head(&self) -> CommitHash {
@@ -209,7 +208,7 @@ impl<T: SymbolicNodeType> Hash for NodePath<T> {
 }
 
 impl<T: SymbolicNodeType> NodePath<T> {
-    fn get_node(&self) -> &Rc<RefCell<Node>> {
+    pub fn get_node(&self) -> &Rc<RefCell<Node>> {
         self.path.last().unwrap()
     }
     pub fn new(path: Vec<Rc<RefCell<Node>>>, unknown_mode: bool, head: PointsTo) -> NodePath<T> {

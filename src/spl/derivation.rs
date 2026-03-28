@@ -2,14 +2,11 @@ use crate::git::conflict::{
     ConflictAnalyzer, ConflictChecker, MergeChainStatistic, MergeResult, MergeStatistic,
     NormalizedMergeStatistic,
 };
-use crate::git::error::{GitSerdeError, PathAssertionError};
+use crate::git::error::PathAssertionError;
 use crate::git::interface::GitInterface;
 use crate::logging::TanglLogger;
 use crate::model::*;
-use crate::spl::{
-    AbortDerivationError, ContinueDerivationError, InitializeDerivationError, InspectionManager,
-    OptimizeMergeOrderError, UpdateProductError,
-};
+use crate::spl::{AbortDerivationError, ContinueDerivationError, DerivationCommitError, InitializeDerivationError, InspectionManager, OptimizeMergeOrderError, UpdateProductError};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
@@ -212,10 +209,10 @@ impl<'a> DerivationManager<'a> {
         &self,
         message: S,
         metadata: &DerivationMetadata,
-    ) -> Result<String, GitSerdeError> {
+    ) -> Result<String, DerivationCommitError> {
         let real_message = message.into();
         let container = CommitMetadataContainer::new(metadata)?;
-        Ok(self.git.empty_commit(real_message, Some(&container))?)
+        Ok(self.git.commit_attached::<_, ConcreteProduct>(real_message, true, Some(&container))?)
     }
 
     fn run_derivation_until_conflict(

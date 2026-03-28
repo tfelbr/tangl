@@ -226,7 +226,8 @@ impl NormalizedPath {
         self.path.is_empty()
     }
     pub fn iter(&self) -> impl Iterator<Item = NormalizedPath> {
-        self.iter_segments().map(|s| NormalizedPath::from(s.clone()))
+        self.iter_segments()
+            .map(|s| NormalizedPath::from(s.clone()))
     }
     pub fn iter_segments(&self) -> impl Iterator<Item = &String> {
         self.path.iter()

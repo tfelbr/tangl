@@ -72,10 +72,7 @@ impl<T: IsGitObject> Display for MergeStatistic<T> {
         let stat = self.get_stat().to_string();
         if !stat.is_empty() {
             f.write_str(
-                format!(
-                    "{} {stat}",
-                    self.get_path().formatted_with_version(true),
-                ).as_str(),
+                format!("{} {stat}", self.get_path().formatted_with_version(true),).as_str(),
             )
         } else {
             f.write_str(self.get_path().formatted_with_version(true).as_str())
@@ -95,7 +92,10 @@ impl<T: IsGitObject> MergeStatistic<T> {
         Ok(Self::new(path, stat.get_stat().clone()))
     }
     pub fn to_normalized(&self) -> NormalizedMergeStatistic {
-        NormalizedMergeStatistic::new(self.path.to_normalized_path_with_version(), self.stat.clone())
+        NormalizedMergeStatistic::new(
+            self.path.to_normalized_path_with_version(),
+            self.stat.clone(),
+        )
     }
     pub fn get_path(&self) -> &NodePath<T> {
         &self.path
@@ -179,13 +179,9 @@ impl<B: IsGitObject, C: IsGitObject> MergeChainStatistic<B, C> {
     pub fn get_n_merges(&self) -> usize {
         let all: Vec<&MergeStatistic<C>> = self
             .iter_chain()
-            .filter(|s| {
-                match s.get_stat() {
-                    MergeResult::Success |
-                    MergeResult::Conflict |
-                    MergeResult::Merging => true,
-                    _ => false,
-                }
+            .filter(|s| match s.get_stat() {
+                MergeResult::Success | MergeResult::Conflict | MergeResult::Merging => true,
+                _ => false,
             })
             .collect();
         all.len()
@@ -443,7 +439,7 @@ impl<'a> ConflictChecker<'a> {
             if skip {
                 chain_statistic.push(MergeStatistic::new(path.clone(), MergeResult::Aborted));
             } else {
-                let (statistic, _) = self.git.merge::<B, C>(path.clone())?;
+                let (statistic, _) = self.git.merge::<Temporary, C>(path.clone())?;
                 if statistic.contains_conflicts() {
                     self.git.abort_merge()?;
                     skip = true;

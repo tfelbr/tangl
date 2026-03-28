@@ -30,11 +30,11 @@ impl From<GitError> for InitializeDerivationError {
         Self::PathAssertion(value.into())
     }
 }
-impl From<GitSerdeError> for InitializeDerivationError {
-    fn from(value: GitSerdeError) -> Self {
+impl From<DerivationCommitError> for InitializeDerivationError {
+    fn from(value: DerivationCommitError) -> Self {
         match value {
-            GitSerdeError::Serde(e) => Self::Serde(e),
-            GitSerdeError::Git(e) => Self::PathAssertion(e.into()),
+            DerivationCommitError::PathAssertion(e) => Self::PathAssertion(e),
+            DerivationCommitError::Serde(e) => Self::Serde(e),
         }
     }
 }
@@ -60,17 +60,17 @@ impl From<PathAssertionError> for ContinueDerivationError {
         Self::PathAssertion(value)
     }
 }
-impl From<GitSerdeError> for ContinueDerivationError {
-    fn from(value: GitSerdeError) -> Self {
-        match value {
-            GitSerdeError::Serde(e) => Self::Serde(e),
-            GitSerdeError::Git(e) => Self::PathAssertion(e.into()),
-        }
-    }
-}
 impl From<GitError> for ContinueDerivationError {
     fn from(value: GitError) -> Self {
         Self::PathAssertion(value.into())
+    }
+}
+impl From<DerivationCommitError> for ContinueDerivationError {
+    fn from(value: DerivationCommitError) -> Self {
+        match value {
+            DerivationCommitError::PathAssertion(e) => Self::PathAssertion(e),
+            DerivationCommitError::Serde(e) => Self::Serde(e),
+        }
     }
 }
 
@@ -146,11 +146,36 @@ impl From<PathAssertionError> for OptimizeMergeOrderError {
         Self::PathAssertion(value)
     }
 }
-impl From<GitSerdeError> for OptimizeMergeOrderError {
-    fn from(value: GitSerdeError) -> Self {
+impl From<DerivationCommitError> for OptimizeMergeOrderError {
+    fn from(value: DerivationCommitError) -> Self {
         match value {
-            GitSerdeError::Serde(e) => Self::Serde(e),
-            GitSerdeError::Git(e) => Self::PathAssertion(e.into()),
+            DerivationCommitError::PathAssertion(e) => Self::PathAssertion(e),
+            DerivationCommitError::Serde(e) => Self::Serde(e),
         }
+    }
+}
+
+#[derive(Debug)]
+pub enum DerivationCommitError {
+    PathAssertion(PathAssertionError),
+    Serde(serde_json::Error),
+}
+impl Error for DerivationCommitError {}
+impl Display for DerivationCommitError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Serde(e) => e.fmt(f),
+            Self::PathAssertion(e) => e.fmt(f),
+        }
+    }
+}
+impl From<PathAssertionError> for DerivationCommitError {
+    fn from(value: PathAssertionError) -> Self {
+        Self::PathAssertion(value)
+    }
+}
+impl From<serde_json::Error> for DerivationCommitError {
+    fn from(value: serde_json::Error) -> Self {
+        Self::Serde(value)
     }
 }

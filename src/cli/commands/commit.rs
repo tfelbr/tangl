@@ -129,11 +129,10 @@ impl CommandInterface for CommitCommand {
             } else {
                 None
             };
-        let out = match maybe_message {
-            Some(message) => context.git.commit(&message, metadata.as_ref())?,
-            None => context.git.interactive_commit()?,
+        match maybe_message {
+            Some(message) => context.git.commit::<_, AnyGitObject>(&message, false, metadata.as_ref())?,
+            None => todo!(),
         };
-        context.logger.info(&out);
         if let Some(feature) = current.try_convert_to::<ConcreteFeature>() {
             handle_feature(&feature, &inspector, &context)?;
         }

@@ -99,36 +99,6 @@ impl From<GitError> for GitModelError {
     }
 }
 
-#[derive(Debug)]
-pub enum GitSerdeError {
-    Git(GitError),
-    Serde(serde_json::Error),
-}
-impl Display for GitSerdeError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Git(err) => err.fmt(f),
-            Self::Serde(err) => err.fmt(f),
-        }
-    }
-}
-impl Error for GitSerdeError {}
-impl From<GitError> for GitSerdeError {
-    fn from(err: GitError) -> Self {
-        Self::Git(err)
-    }
-}
-impl From<serde_json::Error> for GitSerdeError {
-    fn from(err: serde_json::Error) -> Self {
-        Self::Serde(err)
-    }
-}
-impl From<io::Error> for GitSerdeError {
-    fn from(err: io::Error) -> Self {
-        Self::Git(err.into())
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct InvalidVersionError {
     msg: String,
@@ -202,6 +172,11 @@ impl Display for PathAssertionError {
 impl From<GitError> for PathAssertionError {
     fn from(err: GitError) -> Self {
         Self::Git(err)
+    }
+}
+impl From<GitCommandError> for PathAssertionError {
+    fn from(err: GitCommandError) -> Self {
+        Self::Git(err.into())
     }
 }
 impl From<ModelError> for PathAssertionError {

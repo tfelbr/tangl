@@ -111,14 +111,11 @@ impl Node {
             children: RefCell::new(HashMap::new()),
         }
     }
-    pub fn update_branch_data(&mut self, metadata: BranchData) {
-        self.branch_data = metadata;
-    }
-    pub fn add_tag(&mut self, tag: CommitTag) {
-        self.tags.push(tag);
-    }
-    pub fn update_type(&mut self, node_type: NodeType) {
+    fn update_type(&mut self, node_type: NodeType) {
         self.node_type = node_type;
+    }
+    fn update_branch_data(&mut self, metadata: BranchData) {
+        self.branch_data = metadata;
     }
     fn build_display_tree(&self, show_tags: bool) -> Tree<String> {
         let mut formatted = ColoredString::from(self.name.clone());
@@ -234,6 +231,12 @@ impl Node {
                     .insert_path(&path.strip_n_left(1), metadata)
             }
         }
+    }
+    pub fn add_tag(&mut self, tag: CommitTag) {
+        self.tags.push(tag);
+    }
+    pub fn update_head_commit(&mut self, commit: CommitHash) {
+        self.branch_data.head = Some(commit);
     }
     pub fn as_qualified_path(&self) -> NormalizedPath {
         NormalizedPath::from(self.name.clone())
