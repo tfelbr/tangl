@@ -29,10 +29,10 @@ impl PointsTo {
                     if c == &current_head {
                         make_head_info(&current_head).yellow()
                     } else {
-                        c.get_short_hash().yellow()
+                        format!("({})", c.get_short_hash()).yellow()
                     }
                 }
-                Self::Tag(taq) => taq.green(),
+                Self::Tag(tag) => format!("({})", tag).green(),
             }
         } else {
             match self {
@@ -41,10 +41,10 @@ impl PointsTo {
                     if c == &current_head {
                         make_head_info(&current_head).normal()
                     } else {
-                        c.get_short_hash().normal()
+                        format!("({})", c.get_short_hash()).normal()
                     }
                 }
-                Self::Tag(tag) => tag.normal(),
+                Self::Tag(tag) => format!("({})", tag).green().normal(),
             }
         };
         info.to_string()
@@ -100,16 +100,21 @@ impl<T: IsGitObject> NodePath<T> {
             .unwrap()
             .clone()
     }
-    pub fn get_raw_object(&self) -> String {
+    pub fn get_object(&self) -> String {
         match &self.points_to {
             PointsTo::Head => self
-                .get_metadata()
                 .get_head()
-                .unwrap()
                 .get_full_hash()
                 .clone(),
             PointsTo::Commit(hash) => hash.get_full_hash().clone(),
             PointsTo::Tag(tag) => tag.clone(),
+        }
+    }
+    pub fn get_qualified_object(&self) -> String {
+        match &self.points_to {
+            PointsTo::Head => self.get_object(),
+            PointsTo::Commit(_) => self.get_object(),
+            PointsTo::Tag(_) => { todo!() },
         }
     }
     pub fn get_head(&self) -> CommitHash {
@@ -125,6 +130,11 @@ impl<T: IsGitObject> NodePath<T> {
         let base = self.formatted(colored);
         let version = self.points_to.formatted(colored, self.get_head());
         format!("{base} {version}")
+    }
+    pub fn to_normalized_path_with_version(&self) -> NormalizedPath {
+        let mut path = self.to_normalized_path();
+        path.set_version_appendix(Some(self.get_object()));
+        path
     }
 }
 
@@ -185,7 +195,7 @@ impl<T: SymbolicNodeType> ToNormalizedPath for NodePath<T> {
         }
         match &self.points_to {
             PointsTo::Head => path.set_version_appendix::<String>(None),
-            PointsTo::Commit(hash) => path.set_version_appendix(Some(hash.get_short_hash())),
+            PointsTo::Commit(hash) => path.set_version_appendix(Some(hash.get_full_hash())),
             PointsTo::Tag(tag) => path.set_version_appendix(Some(tag)),
         }
         path
@@ -224,7 +234,9 @@ impl<T: SymbolicNodeType> NodePath<T> {
         }
     }
     pub fn move_to(mut self, path: &NormalizedPath) -> Option<NodePath<AnyNode>> {
-        for p in path.iter_string() {
+        let mut without_version = path.clone();
+        without_version.strip_version();
+        for p in without_version.iter_segments() {
             let node = self.get_node().borrow().get_child(p)?.clone();
             self.path.push(node);
         }
@@ -243,18 +255,6 @@ impl<T: SymbolicNodeType> NodePath<T> {
     pub fn move_to_index(self, index: usize) -> NodePath<AnyNode> {
         let path = self.path[0..index + 1].to_vec();
         NodePath::<AnyNode>::new(path, self.unknown_mode, PointsTo::Head)
-    }
-    pub fn move_to_last_valid(self, path: &NormalizedPath) -> NodePath<AnyNode> {
-        let mut current = self.as_any_type();
-        for part in path.iter() {
-            let next = current.clone().move_to(&part);
-            if next.is_some() {
-                current = next.unwrap();
-            } else {
-                break;
-            }
-        }
-        current
     }
     pub fn has_children(&self) -> bool {
         self.get_node().borrow().has_children()
@@ -306,7 +306,8 @@ impl<T: SymbolicNodeType> NodePath<T> {
         self.get_node().borrow().display_tree(show_tags)
     }
     pub fn formatted(&self, colored: bool) -> String {
-        let path = self.to_normalized_path();
+        let mut path = self.to_normalized_path();
+        path.strip_version();
         if colored {
             path.to_string().blue().to_string()
         } else {

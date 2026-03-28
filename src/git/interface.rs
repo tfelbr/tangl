@@ -276,7 +276,7 @@ impl GitInterface {
         &self,
         path: NodePath<T>,
     ) -> Result<(MergeChainStatistic<B, T>, String), PathAssertionError> {
-        let object = path.get_raw_object();
+        let object = path.get_qualified_object();
         let command = vec!["merge", object.as_str()];
         let out = self.raw_git_interface.run(&command)?;
         let result = if out.status.success() {

@@ -92,7 +92,7 @@ impl<T: IsGitObject> MergeStatistic<T> {
         Ok(Self::new(path, stat.get_stat().clone()))
     }
     pub fn to_normalized(&self) -> NormalizedMergeStatistic {
-        NormalizedMergeStatistic::new(self.path.to_normalized_path(), self.stat.clone())
+        NormalizedMergeStatistic::new(self.path.to_normalized_path_with_version(), self.stat.clone())
     }
     pub fn get_path(&self) -> &NodePath<T> {
         &self.path

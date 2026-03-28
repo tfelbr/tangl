@@ -83,7 +83,7 @@ impl Add for NormalizedPath {
         if new_path.last_is(&NormalizedPath::from("")) && new_path.len() > 1 {
             new_path = new_path.strip_n_right(new_path.len() - 1);
         }
-        for (i, part) in rhs.iter_string().enumerate() {
+        for (i, part) in rhs.iter_segments().enumerate() {
             match part.as_str() {
                 "." => {}
                 ".." => {
@@ -105,7 +105,6 @@ impl Add for NormalizedPath {
                 }
             }
         }
-        new_path.set_version_appendix(rhs.get_version_appendix());
         new_path
     }
 }
@@ -151,9 +150,8 @@ impl NormalizedPath {
         for split in qualified_str.trim().split(PATH_SEPARATOR) {
             if split.contains(VERSION_SEPARATOR) {
                 let path_and_version = split.split(VERSION_SEPARATOR).collect::<Vec<&str>>();
-                let path = path_and_version[0];
                 let version = path_and_version[1];
-                self.path.push(path.to_lowercase());
+                self.path.push(split.to_lowercase());
                 self.version_appendix = Some(version.to_string());
             } else {
                 self.path.push(split.to_lowercase());
@@ -164,13 +162,31 @@ impl NormalizedPath {
         self.version_appendix.as_ref()
     }
     pub fn set_version_appendix<S: Into<String>>(&mut self, version_appendix: Option<S>) {
-        self.version_appendix = version_appendix.map(Into::into);
+        if let Some(version) = version_appendix {
+            let version = version.into();
+            let last = self.path.pop().unwrap();
+            if self.version_appendix.is_some() {
+                let split = last.split(VERSION_SEPARATOR).collect::<Vec<&str>>();
+                self.push(format!("{}:{version}", split[0]));
+            } else {
+                self.push(format!("{last}:{version}"));
+            }
+        } else {
+            if self.version_appendix.is_some() {
+                let last = self.path.pop().unwrap();
+                let split = last.split(VERSION_SEPARATOR).collect::<Vec<&str>>();
+                self.push(format!("{}", split[0]));
+            }
+        }
     }
     pub fn strip_n(&self, n_left: usize, n_right: usize) -> NormalizedPath {
         NormalizedPath::from(self.path[n_left..n_right].to_vec())
     }
     pub fn strip_n_left(&self, n: usize) -> NormalizedPath {
         self.strip_n(n, self.path.len())
+    }
+    pub fn strip_version(&mut self) {
+        self.set_version_appendix::<String>(None)
     }
     pub fn strip_n_right(&self, n: usize) -> NormalizedPath {
         self.strip_n(0, n)
@@ -210,9 +226,9 @@ impl NormalizedPath {
         self.path.is_empty()
     }
     pub fn iter(&self) -> impl Iterator<Item = NormalizedPath> {
-        self.iter_string().map(|s| NormalizedPath::from(s.clone()))
+        self.iter_segments().map(|s| NormalizedPath::from(s.clone()))
     }
-    pub fn iter_string(&self) -> impl Iterator<Item = &String> {
+    pub fn iter_segments(&self) -> impl Iterator<Item = &String> {
         self.path.iter()
     }
     pub fn get(&self, index: usize) -> Option<NormalizedPath> {
