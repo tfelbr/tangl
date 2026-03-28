@@ -82,7 +82,7 @@ impl GitCLI {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct GitInterface {
     model: TreeDataModel,
     raw_git_interface: GitCLI,
@@ -180,7 +180,7 @@ impl GitInterface {
         let mut vec = vec![];
         for path in paths {
             vec.push(self.assert_path(path)?);
-        };
+        }
         Ok(vec)
     }
 
@@ -231,7 +231,7 @@ impl GitInterface {
         self.checkout_raw(&path.to_normalized_path())
     }
 
-    pub(super) fn create_branch_no_mut(&self, path: &NormalizedPath) -> Result<String, GitError> {
+    fn create_branch_no_mut(&self, path: &NormalizedPath) -> Result<String, GitError> {
         let branch = path.to_git_branch();
         let command = vec!["branch", branch.as_str()];
         Ok(output_to_result(
@@ -241,17 +241,17 @@ impl GitInterface {
     }
 
     pub fn create_branch<T: SymbolicNodeType>(
-        &mut self,
+        &self,
         path: &NormalizedPath,
     ) -> Result<NodePath<T>, PathAssertionError> {
         let current = self.assert_current_node_path::<AnyGitObject>()?;
         let commit = self.get_commit(&current)?;
         let node_type = self
-            .model
+            .get_model()
             .insert_git_branch(path.to_git_branch(), commit.get_hash().get_full_hash());
         if !T::is_compatible(&node_type) {
             let message = format!(
-                "Expected to create branch of type '{}', but it would be of type '{}'",
+                "fatal: Expected to create branch of type '{}', but it would be of type '{}'",
                 T::identifier(),
                 node_type.get_type_name(),
             );

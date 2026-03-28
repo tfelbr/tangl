@@ -1,6 +1,7 @@
 use crate::model::*;
 use colored::{ColoredString, Colorize};
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
@@ -86,13 +87,13 @@ pub enum PayloadType {
     Tag(CommitTag),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Node {
     name: String,
     node_type: NodeType,
     branch_data: BranchData,
     tags: Vec<CommitTag>,
-    children: HashMap<String, Rc<Node>>,
+    children: RefCell<HashMap<String, Rc<RefCell<Node>>>>,
 }
 
 impl Node {
@@ -107,7 +108,7 @@ impl Node {
             node_type,
             branch_data,
             tags,
-            children: HashMap::new(),
+            children: RefCell::new(HashMap::new()),
         }
     }
     pub fn update_branch_data(&mut self, metadata: BranchData) {
@@ -134,11 +135,13 @@ impl Node {
             formatted.to_string()
         };
         let mut tree = Tree::<String>::new(content);
-        let mut sorted_children = self.children.iter().collect::<Vec<_>>();
+        let children = self.children.borrow();
+        let mut sorted_children = children.iter().collect::<Vec<_>>();
         sorted_children.sort_by(|a, b| b.0.chars().cmp(a.0.chars()));
         sorted_children.reverse();
         for (_, child) in sorted_children {
-            tree.leaves.push(child.build_display_tree(show_tags));
+            tree.leaves
+                .push(child.borrow().build_display_tree(show_tags));
         }
         tree
     }
@@ -147,7 +150,7 @@ impl Node {
         self.node_type
             .decide_next_type(real_name.as_str(), metadata)
     }
-    fn add_child<S: Into<String>>(&mut self, name: S, metadata: PayloadType) -> NodeType {
+    fn add_child<S: Into<String>>(&self, name: S, metadata: PayloadType) -> NodeType {
         let real_name = name.into();
         let (branch, tags) = match metadata {
             PayloadType::Branch(branch) => (branch, vec![]),
@@ -157,44 +160,32 @@ impl Node {
             }
         };
         let node_type = self.decide_child_type(real_name.clone(), &branch);
-        let child = Rc::new(Node::new(
+        let child = Rc::new(RefCell::new(Node::new(
             real_name.clone(),
             node_type.clone(),
             branch,
             tags,
-        ));
-        self.children.insert(real_name, child);
+        )));
+        self.children.borrow_mut().insert(real_name, child);
         node_type
     }
-    fn update_child<S: Into<String>>(&mut self, name: S, metadata: PayloadType) -> NodeType {
+    fn update_child<S: Into<String>>(&self, name: S, metadata: PayloadType) -> NodeType {
         let real_name = name.into();
         let node_type = match metadata {
             PayloadType::Branch(branch) => {
                 let new_type = self.decide_child_type(real_name.clone(), &branch);
-                let child = self.get_child_mut(real_name).unwrap();
-                child.update_type(new_type.clone());
-                child.update_branch_data(branch);
+                let child = self.get_child(real_name).unwrap();
+                child.borrow_mut().update_type(new_type.clone());
+                child.borrow_mut().update_branch_data(branch);
                 new_type
             }
             PayloadType::Tag(tag) => {
-                let child = self.get_child_mut(real_name.clone()).unwrap();
-                child.add_tag(tag);
-                child.get_type().clone()
+                let child = self.get_child(real_name.clone()).unwrap();
+                child.borrow_mut().add_tag(tag);
+                child.borrow().get_type().clone()
             }
         };
         node_type
-    }
-    fn get_child_mut<S: Into<String>>(&mut self, name: S) -> Option<&mut Node> {
-        let real_name = name.into();
-        let maybe_mut = Rc::get_mut(self.children.get_mut(&real_name)?);
-        match maybe_mut {
-            Some(node) => Some(node),
-            None => panic!(
-                "Tried to get child '{}' as mutable but failed: shared references exist\n\
-                Make sure to drop all references to the node tree if you attempt modifications",
-                real_name
-            ),
-        }
     }
     pub fn get_name(&self) -> &String {
         &self.name
@@ -208,21 +199,22 @@ impl Node {
     pub fn get_tags(&self) -> &Vec<CommitTag> {
         &self.tags
     }
-    pub fn get_child<S: Into<String>>(&self, name: S) -> Option<&Rc<Node>> {
-        Some(self.children.get(&name.into())?)
+    pub fn get_child<S: Into<String>>(&self, name: S) -> Option<Rc<RefCell<Node>>> {
+        Some(self.children.borrow().get(&name.into())?.clone())
     }
     pub fn has_children(&self) -> bool {
-        !self.children.is_empty()
+        !self.children.borrow().is_empty()
     }
-    pub fn iter_children(&self) -> impl Iterator<Item = (&String, &Rc<Node>)> {
-        self.children.iter()
+    pub fn get_children(&self) -> Vec<Rc<RefCell<Node>>> {
+        let nodes = self.children.borrow();
+        nodes.values().cloned().collect()
     }
-    pub fn insert_path(&mut self, path: &NormalizedPath, metadata: PayloadType) -> NodeType {
+    pub fn insert_path(&self, path: &NormalizedPath, metadata: PayloadType) -> NodeType {
         match path.len() {
             0 => self.node_type.clone(),
             1 => {
                 let name = path.get(0).unwrap().to_string();
-                let new_type = match self.get_child_mut(&name) {
+                let new_type = match self.get_child(&name) {
                     Some(_) => self.update_child(name, metadata),
                     None => self.add_child(name.clone(), metadata),
                 };
@@ -230,51 +222,21 @@ impl Node {
             }
             _ => {
                 let name = path.get(0).unwrap().to_string();
-                let next_child = match self.get_child_mut(&name) {
+                let next_child = match self.get_child(&name) {
                     Some(node) => node,
                     None => {
                         self.add_child(name.clone(), PayloadType::Branch(BranchData::empty()));
-                        self.get_child_mut(&name).unwrap()
+                        self.get_child(&name).unwrap()
                     }
                 };
-                next_child.insert_path(&path.strip_n_left(1), metadata)
+                next_child
+                    .borrow_mut()
+                    .insert_path(&path.strip_n_left(1), metadata)
             }
         }
     }
     pub fn as_qualified_path(&self) -> NormalizedPath {
         NormalizedPath::from(self.name.clone())
-    }
-    pub fn get_qualified_paths_by<T, P>(
-        &self,
-        initial_path: &NormalizedPath,
-        predicate: &P,
-        categories: &Vec<T>,
-    ) -> HashMap<T, Vec<NormalizedPath>>
-    where
-        P: Fn(&T, &Node) -> bool,
-        T: Hash + Eq + Clone + Debug,
-    {
-        let mut result: HashMap<T, Vec<NormalizedPath>> = HashMap::new();
-        for child in self.children.values() {
-            let path = initial_path.clone() + child.as_qualified_path();
-            for t in categories {
-                let to_insert = if predicate(t, child) {
-                    vec![path.clone()]
-                } else {
-                    vec![]
-                };
-                if result.contains_key(t) {
-                    result.get_mut(t).unwrap().extend(to_insert);
-                } else {
-                    result.insert(t.clone(), to_insert);
-                }
-            }
-            let from_child = child.get_qualified_paths_by(&path, predicate, categories);
-            for (t, value) in from_child {
-                result.get_mut(&t).unwrap().extend(value);
-            }
-        }
-        result
     }
     pub fn display_tree(&self, show_tags: bool) -> String {
         self.build_display_tree(show_tags).to_string()

@@ -151,21 +151,19 @@ fn handle_continue(
             }
         })
         .collect();
-    let mut completed_chain = MergeChainStatistic::<_, ConcreteFeature>::new(derivation_manager.get_product().clone());
+    let mut completed_chain =
+        MergeChainStatistic::<_, ConcreteFeature>::new(derivation_manager.get_product().clone());
     completed_chain.fill_from_normalized(completed, git)?;
     let still_missing = derivation_manager.get_pending_chain()?;
-    logger.info(format!("Merged {} feature(s)", completed_chain.len() - 1));
-    for complete in completed_chain.iter() {
+    logger.info(format!("Merged {} feature(s)", completed_chain.len()));
+    for complete in completed_chain.iter_chain() {
         logger.info(format!("  {}", complete));
     }
     if still_missing.is_some() {
         let m = still_missing.unwrap();
         logger.info("\nEncountered conflicts while merging");
         logger.info(conflict_hint());
-        logger.info(format!(
-            "\n{} feature(s) remain(s)",
-            m.get_n_merges()
-        ));
+        logger.info(format!("\n{} feature(s) remain(s)", m.get_n_merges()));
         for info in m.display_as_list() {
             logger.info(format!("  {}", info));
         }

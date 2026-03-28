@@ -1,8 +1,7 @@
 use crate::cli::*;
 use crate::git::conflict::{ConflictChecker, MergeChainStatistics};
 use crate::model::{
-    AnyGitObject, CommitMetadataContainer, ConcreteFeature,
-    ConcreteProduct, NodePath,
+    AnyGitObject, CommitMetadataContainer, ConcreteFeature, ConcreteProduct, NodePath,
 };
 use crate::spl::{DerivationMetadata, DerivationState, InspectionManager};
 use clap::{Arg, Command};

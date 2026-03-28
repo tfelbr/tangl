@@ -1,31 +1,29 @@
 use crate::model::error::WrongNodeTypeError;
 use crate::model::*;
+use std::cell::RefCell;
 use std::rc::Rc;
 
-pub const FEATURES_PREFIX: &str = "feature";
-pub const PRODUCTS_PREFIX: &str = "product";
-
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct TreeDataModel {
-    virtual_root: Rc<Node>,
+    virtual_root: Rc<RefCell<Node>>,
     qualified_paths_with_branch: Vec<NormalizedPath>,
-    unknowns_exist: bool,
+    unknowns_exist: RefCell<bool>,
 }
 impl TreeDataModel {
     pub fn new() -> Self {
         Self {
-            virtual_root: Rc::new(Node::new(
+            virtual_root: Rc::new(RefCell::new(Node::new(
                 "",
                 NodeType::VirtualRoot,
                 BranchData::empty(),
                 vec![],
-            )),
+            ))),
             qualified_paths_with_branch: vec![],
-            unknowns_exist: false,
+            unknowns_exist: RefCell::new(false),
         }
     }
     pub fn insert_git_branch<S1: Into<String>, S2: Into<String>>(
-        &mut self,
+        &self,
         path: S1,
         head: S2,
     ) -> NodeType {
@@ -33,21 +31,23 @@ impl TreeDataModel {
         let normalized_path = branch.to_normalized_path();
         let hash = CommitHash::new(head);
         let branch_data = BranchData::new(Some(branch), Some(hash));
-        let node_type = Rc::get_mut(&mut self.virtual_root)
-            .unwrap()
+        let node_type = self
+            .virtual_root
+            .borrow_mut()
             .insert_path(&normalized_path, PayloadType::Branch(branch_data));
-        self.qualified_paths_with_branch.push(normalized_path);
         match node_type {
-            NodeType::Unknown => self.unknowns_exist = true,
+            NodeType::Unknown => {
+                self.unknowns_exist.replace(true);
+            }
             _ => {}
         }
         node_type
     }
-    pub fn insert_tag<S: Into<String>>(&mut self, path: S) {
+    pub fn insert_tag<S: Into<String>>(&self, path: S) {
         let path = path.into();
         let normalized_path = path.to_normalized_path();
         let tag = CommitTag::new(path);
-        Rc::get_mut(&mut self.virtual_root).unwrap().insert_path(
+        self.virtual_root.borrow_mut().insert_path(
             &normalized_path.strip_n_right(normalized_path.len() - 1),
             PayloadType::Tag(tag),
         );
@@ -58,7 +58,7 @@ impl TreeDataModel {
     pub fn get_virtual_root(&self) -> NodePath<VirtualRoot> {
         NodePath::<VirtualRoot>::new(
             vec![self.virtual_root.clone()],
-            self.unknowns_exist,
+            self.unknowns_exist.borrow().clone(),
             PointsTo::Head,
         )
     }

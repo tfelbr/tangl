@@ -225,7 +225,7 @@ impl<'a> DerivationManager<'a> {
         chain.fill_from_normalized(self.current_state.get_missing().clone(), self.git)?;
         let mut new_state = self.current_state.clone();
         let mut missing_feature: Option<NodePath<ConcreteFeature>> = None;
-        for stat in chain.iter() {
+        for stat in chain.iter_chain() {
             let feature = stat.get_path();
             let (statistic, _) = self.git.merge::<ConcreteProduct, _>(feature.clone())?;
             if statistic.contains_conflicts() {
@@ -256,9 +256,9 @@ impl<'a> DerivationManager<'a> {
             let mut chain = MergeChainStatistic::new(self.product.clone());
             chain.fill_from_normalized(self.current_state.missing.clone(), self.git)?;
             if self.git.pending_merge()? {
-                let second = chain.remove(1);
+                let second = chain.remove(0);
                 let merging = MergeStatistic::new(second.get_path().clone(), MergeResult::Merging);
-                chain.insert(1, merging);
+                chain.insert(0, merging);
             };
             Some(chain)
         };
@@ -320,8 +320,7 @@ impl<'a> DerivationManager<'a> {
         match self.current_state.get_state() {
             DerivationState::InProgress => {
                 let maybe_merging = self.run_derivation_until_conflict()?;
-                let metadata =
-                    DerivationMetadata::new(None, Some(self.current_state.clone()));
+                let metadata = DerivationMetadata::new(None, Some(self.current_state.clone()));
                 let message = match self.current_state.get_state() {
                     DerivationState::InProgress => "Derivation progress",
                     DerivationState::None => "Derivation finished",
@@ -348,8 +347,7 @@ impl<'a> DerivationManager<'a> {
         if old_order.is_none() || old_order.unwrap() != new_order {
             self.current_state
                 .update_missing(&new_order.to_normalized());
-            let metadata =
-                DerivationMetadata::new(None, Some(self.current_state.clone()));
+            let metadata = DerivationMetadata::new(None, Some(self.current_state.clone()));
             self.derivation_commit("Optimize order", &metadata)?;
         }
         Ok(new_order)

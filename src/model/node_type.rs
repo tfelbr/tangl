@@ -3,6 +3,10 @@ use colored::{ColoredString, Colorize};
 use std::fmt::Debug;
 use std::hash::Hash;
 
+pub const FEATURE_ROOT: &str = "feature";
+pub const PRODUCT_ROOT: &str = "product";
+pub const TEMPORARY: &str = "tmp";
+
 pub trait SymbolicNodeType: Clone + Debug + Eq + PartialEq + Hash {
     fn identifier() -> String;
     fn is_compatible(node_type: &NodeType) -> bool {
@@ -172,6 +176,23 @@ impl IsGitObject for ConcreteArea {}
 impl IsOnOrUnderArea for ConcreteArea {}
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct Temporary;
+impl SymbolicNodeType for Temporary {
+    fn identifier() -> String {
+        NodeType::Temporary.get_type_name()
+    }
+
+    fn is_compatible_to_node_type(node_type: &NodeType) -> bool {
+        match node_type {
+            NodeType::Temporary => true,
+            _ => false,
+        }
+    }
+}
+impl IsGitObject for Temporary {}
+impl IsOnOrUnderArea for Temporary {}
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct VirtualRoot;
 impl SymbolicNodeType for VirtualRoot {
     fn identifier() -> String {
@@ -202,12 +223,15 @@ impl SymbolicNodeType for AnyNode {
 pub struct AnyGitObject;
 impl SymbolicNodeType for AnyGitObject {
     fn identifier() -> String {
-        "branch able".to_string()
+        "git object".to_string()
     }
 
     fn is_compatible_to_node_type(node_type: &NodeType) -> bool {
         match node_type {
-            NodeType::ConcreteFeature | NodeType::ConcreteProduct | NodeType::ConcreteArea => true,
+            NodeType::ConcreteFeature
+            | NodeType::ConcreteProduct
+            | NodeType::ConcreteArea
+            | NodeType::Temporary => true,
             _ => false,
         }
     }
@@ -224,6 +248,7 @@ pub enum NodeType {
     ProductRoot,
     ConcreteArea,
     VirtualRoot,
+    Temporary,
     Unknown,
 }
 
@@ -245,15 +270,13 @@ impl NodeType {
                 }
             }
             Self::VirtualRoot => Self::ConcreteArea,
-            Self::ConcreteArea => {
-                if name.starts_with(FEATURES_PREFIX) {
-                    Self::FeatureRoot
-                } else if name.starts_with(PRODUCTS_PREFIX) {
-                    Self::ProductRoot
-                } else {
-                    Self::Unknown
-                }
-            }
+            Self::ConcreteArea => match name {
+                FEATURE_ROOT => Self::FeatureRoot,
+                PRODUCT_ROOT => Self::ProductRoot,
+                TEMPORARY => Self::Temporary,
+                _ => Self::Unknown,
+            },
+            Self::Temporary => Self::Temporary,
             Self::Unknown => Self::Unknown,
         }
     }
@@ -279,6 +302,7 @@ impl NodeType {
             Self::AbstractFeature => "abstract feature",
             Self::ConcreteProduct => "product",
             Self::AbstractProduct => "abstract product",
+            Self::Temporary => "temporary",
             Self::Unknown => "",
         };
         name.to_string()
@@ -294,6 +318,7 @@ impl NodeType {
             Self::AbstractFeature => "f'",
             Self::ConcreteProduct => "p",
             Self::AbstractProduct => "p'",
+            Self::Temporary => "temp",
             Self::Unknown => "",
         };
         name.to_string()

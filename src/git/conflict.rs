@@ -2,7 +2,8 @@ use crate::git::error::PathAssertionError;
 use crate::git::interface::GitInterface;
 use crate::logging::TanglLogger;
 use crate::model::{
-    AnyGitObject, IsGitObject, NodePath, NormalizedPath, ToNormalizedPath, ToNormalizedPaths,
+    AnyGitObject, IsGitObject, NodePath, NormalizedPath, Temporary, ToNormalizedPath,
+    ToNormalizedPaths,
 };
 use colored::Colorize;
 use itertools::Itertools;
@@ -10,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
+use std::iter::once;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum MergeResult {
@@ -65,6 +67,19 @@ pub struct MergeStatistic<T: IsGitObject> {
     stat: MergeResult,
 }
 
+impl<T: IsGitObject> Display for MergeStatistic<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(
+            format!(
+                "{} {}",
+                self.get_path().formatted_with_version(true),
+                self.get_stat(),
+            )
+            .as_str(),
+        )
+    }
+}
+
 impl<T: IsGitObject> MergeStatistic<T> {
     pub fn new(path: NodePath<T>, stat: MergeResult) -> Self {
         Self { path, stat }
@@ -87,19 +102,10 @@ impl<T: IsGitObject> MergeStatistic<T> {
     }
 }
 
-impl<T: IsGitObject> Display for MergeStatistic<T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(format!("{} {}", self.get_stat(), self.get_path()).as_str())
-    }
-}
-
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct MergeChainStatistic<B: IsGitObject, C: IsGitObject> {
     base: MergeStatistic<B>,
     chain: Vec<MergeStatistic<C>>,
-    n_success: usize,
-    n_up_to_date: usize,
-    n_conflict: usize,
 }
 
 impl<B: IsGitObject, C: IsGitObject> MergeChainStatistic<B, C> {
@@ -107,31 +113,9 @@ impl<B: IsGitObject, C: IsGitObject> MergeChainStatistic<B, C> {
         Self {
             base: MergeStatistic::new(base, MergeResult::Base),
             chain: vec![],
-            n_success: 0,
-            n_up_to_date: 0,
-            n_conflict: 0,
-        }
-    }
-
-    fn add_to_internal_counters(&mut self, stat: &MergeStatistic<C>) {
-        match stat.get_stat() {
-            MergeResult::Success => self.n_success += 1,
-            MergeResult::UpToDate => self.n_up_to_date += 1,
-            MergeResult::Conflict => self.n_conflict += 1,
-            _ => {}
-        }
-    }
-
-    fn subtract_from_internal_counters(&mut self, stat: &MergeStatistic<C>) {
-        match stat.get_stat() {
-            MergeResult::Success => self.n_success -= 1,
-            MergeResult::UpToDate => self.n_up_to_date -= 1,
-            MergeResult::Conflict => self.n_conflict -= 1,
-            _ => {}
         }
     }
     pub fn push(&mut self, stat: MergeStatistic<C>) {
-        self.add_to_internal_counters(&stat);
         self.chain.push(stat);
     }
     pub fn fill(&mut self, stats: Vec<MergeStatistic<C>>) {
@@ -150,15 +134,13 @@ impl<B: IsGitObject, C: IsGitObject> MergeChainStatistic<B, C> {
         Ok(())
     }
     pub fn to_normalized(&self) -> Vec<NormalizedMergeStatistic> {
-        self.iter().map(|s| s.to_normalized()).collect()
+        self.iter_chain().map(|s| s.to_normalized()).collect()
     }
     pub fn insert(&mut self, index: usize, stat: MergeStatistic<C>) {
-        self.add_to_internal_counters(&stat);
         self.chain.insert(index, stat);
     }
     pub fn remove(&mut self, index: usize) -> MergeStatistic<C> {
         let statistic = self.chain.remove(index);
-        self.subtract_from_internal_counters(&statistic);
         statistic
     }
     pub fn get(&self, index: usize) -> Option<&MergeStatistic<C>> {
@@ -174,23 +156,49 @@ impl<B: IsGitObject, C: IsGitObject> MergeChainStatistic<B, C> {
     pub fn get_chain(&self) -> &Vec<MergeStatistic<C>> {
         &self.chain
     }
-    pub fn iter(&self) -> impl Iterator<Item = &MergeStatistic<C>> {
+    pub fn iter_chain(&self) -> impl Iterator<Item = &MergeStatistic<C>> {
         self.chain.iter()
     }
     pub fn get_n_success(&self) -> usize {
-        self.n_success
+        let success: Vec<&MergeStatistic<C>> = self
+            .iter_chain()
+            .filter(|s| s.get_stat() == &MergeResult::Success)
+            .collect();
+        success.len()
+    }
+    pub fn get_n_conflict(&self) -> usize {
+        let all: Vec<&MergeStatistic<C>> = self
+            .iter_chain()
+            .filter(|s| s.get_stat() == &MergeResult::Conflict)
+            .collect();
+        all.len()
     }
     pub fn get_n_merges(&self) -> usize {
-        self.n_success + self.n_conflict
+        let all: Vec<&MergeStatistic<C>> = self
+            .iter_chain()
+            .filter(|s| {
+                match s.get_stat() {
+                    MergeResult::Success |
+                    MergeResult::Conflict |
+                    MergeResult::Merging => true,
+                    _ => false,
+                }
+            })
+            .collect();
+        all.len()
     }
     pub fn get_n_up_to_date(&self) -> usize {
-        self.n_up_to_date
+        let all: Vec<&MergeStatistic<C>> = self
+            .iter_chain()
+            .filter(|s| s.get_stat() == &MergeResult::UpToDate)
+            .collect();
+        all.len()
     }
     pub fn all_up_to_date(&self) -> bool {
         if self.chain.is_empty() || self.chain.len() == 1 {
             true
         } else {
-            self.n_up_to_date == self.chain.len() - 1
+            self.get_n_up_to_date() == self.chain.len()
         }
     }
     pub fn len(&self) -> usize {
@@ -199,20 +207,20 @@ impl<B: IsGitObject, C: IsGitObject> MergeChainStatistic<B, C> {
     pub fn is_empty(&self) -> bool {
         self.chain.is_empty()
     }
-    pub fn get_n_conflict(&self) -> usize {
-        self.n_conflict
-    }
     pub fn contains_conflicts(&self) -> bool {
-        self.n_conflict > 0
+        self.get_n_conflict() > 0
     }
     pub fn display_as_path(&self) -> String {
-        self.chain.iter().map(|stat| stat.to_string()).join(" <- ")
+        vec![&self.base]
+            .iter()
+            .map(|m| m.to_string())
+            .chain(self.chain.iter().map(|stat| stat.to_string()))
+            .join(" <- ")
     }
     pub fn display_as_list(&self) -> impl Iterator<Item = String> {
-        self.chain.iter().map(|stat| match stat.get_stat() {
-            MergeResult::Base => stat.to_string(),
-            _ => format!(" <- {}", stat),
-        })
+        once(&self.base)
+            .map(|m| m.to_string())
+            .chain(self.chain.iter().map(|stat| format!(" <- {}", stat)))
     }
 }
 
@@ -236,8 +244,8 @@ impl<B: IsGitObject, T: IsGitObject> MergeChainStatistics<B, T> {
         }
     }
     pub fn push(&mut self, statistic: MergeChainStatistic<B, T>) {
-        self.total_successes += statistic.n_success;
-        self.total_conflicts += statistic.n_conflict;
+        self.total_successes += statistic.get_n_success();
+        self.total_conflicts += statistic.get_n_conflict();
         self.statistics.push(statistic);
     }
     pub fn iter_all(&self) -> impl Iterator<Item = &MergeChainStatistic<B, T>> {
@@ -335,12 +343,12 @@ impl<T: IsGitObject> MergeStatistics<T> {
 
 #[derive(Debug, Clone)]
 pub struct ConflictChecker<'a> {
-    interface: &'a GitInterface,
+    git: &'a GitInterface,
 }
 
 impl<'a> ConflictChecker<'a> {
     pub fn new(interface: &'a GitInterface) -> Self {
-        Self { interface }
+        Self { git: interface }
     }
 
     pub fn check_k_permutations<T: IsGitObject>(
@@ -421,26 +429,27 @@ impl<'a> ConflictChecker<'a> {
             panic!("Chain has to contain at least 1 path")
         }
         let mut chain_statistic = MergeChainStatistic::new(base.clone());
-        let current_path = self.interface.assert_current_node_path::<AnyGitObject>()?;
-        self.interface.checkout(base)?;
-        let temporary = NormalizedPath::from("tmp");
-        self.interface.create_branch_no_mut(&temporary)?;
-        self.interface.checkout_raw(&temporary)?;
+        let current_path = self.git.assert_current_node_path::<AnyGitObject>()?;
+        self.git.checkout(base)?;
+        let area = self.git.get_current_area()?;
+        let temporary = area.to_normalized_path() + NormalizedPath::from("tmp");
+        self.git.create_branch::<Temporary>(&temporary)?;
+        self.git.checkout_raw(&temporary)?;
         let mut skip = false;
-        for path in chain[1..].to_vec().into_iter() {
+        for path in chain.to_vec().into_iter() {
             if skip {
                 chain_statistic.push(MergeStatistic::new(path.clone(), MergeResult::Aborted));
             } else {
-                let (statistic, _) = self.interface.merge::<B, C>(path.clone())?;
+                let (statistic, _) = self.git.merge::<B, C>(path.clone())?;
                 if statistic.contains_conflicts() {
-                    self.interface.abort_merge()?;
+                    self.git.abort_merge()?;
                     skip = true;
                 }
-                chain_statistic.push(statistic.get(1).unwrap().clone());
+                chain_statistic.push(statistic.get(0).unwrap().clone());
             }
         }
-        self.interface.checkout(&current_path)?;
-        self.interface.delete_branch_no_mut(&temporary)?;
+        self.git.checkout(&current_path)?;
+        self.git.delete_branch_no_mut(&temporary)?;
         Ok(chain_statistic)
     }
 }
@@ -453,6 +462,19 @@ pub struct Conflict2DMatrix {
     >,
 }
 
+impl Display for Conflict2DMatrix {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut result = String::new();
+        for (k, v) in &self.matrix {
+            result += k.to_string().as_str();
+            for (_, value) in v {
+                result += format!("  {}\n", value).as_str();
+            }
+        }
+        f.write_str(result.as_str())
+    }
+}
+
 impl Conflict2DMatrix {
     pub fn new(statistics: &MergeChainStatistics<AnyGitObject, AnyGitObject>) -> Self {
         let mut matrix: HashMap<
@@ -460,7 +482,7 @@ impl Conflict2DMatrix {
             HashMap<NodePath<AnyGitObject>, MergeStatistic<AnyGitObject>>,
         > = HashMap::new();
         for chain in statistics.iter_all() {
-            if chain.len() > 2 {
+            if chain.len() > 1 {
                 panic!("Matrix only supports 2 dimensions")
             }
             let base = chain.get_base();
@@ -485,7 +507,7 @@ impl Conflict2DMatrix {
             base.try_convert_to()?,
             MergeStatistics::new(MergeStatisticWeight::Simple),
         )];
-        for path in order[1..].iter() {
+        for path in order.iter() {
             let converted = path.try_convert_to()?;
             let voters = final_path.iter().map(|(k, _)| k.clone()).collect();
             let votes = self.calculate_votes(&voters, &vec![converted.clone()]);
@@ -632,15 +654,8 @@ impl<'a> ConflictAnalyzer<'a> {
             self.logger.debug(result.display_as_path());
             statistics.push(result.clone());
             if result.contains_conflicts() {
-                conflicting_with_base.push(
-                    result
-                        .get_chain()
-                        .get(1)
-                        .unwrap()
-                        .get_path()
-                        .try_convert_to()
-                        .unwrap(),
-                );
+                conflicting_with_base
+                    .push(result.get(0).unwrap().get_path().try_convert_to().unwrap());
             }
         }
         let to_test_with_base: Vec<NodePath<AnyGitObject>> = paths
@@ -659,13 +674,13 @@ impl<'a> ConflictAnalyzer<'a> {
             .checker
             .check_permutations_against_base(&to_test_with_base, &base, 2)
         {
-            let mut result = with_base?;
+            let result = with_base?;
             self.logger.debug(result.display_as_path());
-            result.remove(0);
-            let second = result.remove(0);
-            let new = MergeStatistic::new(second.get_path().clone(), MergeResult::Base);
-            result.insert(0, new);
-            statistics.push(result);
+            let second = result.get(0).unwrap();
+            let third = result.get(1).unwrap();
+            let mut new = MergeChainStatistic::new(second.get_path().clone());
+            new.push(third.clone());
+            statistics.push(new);
         }
         self.logger.debug("Checking conflicting without base");
         // TODO
