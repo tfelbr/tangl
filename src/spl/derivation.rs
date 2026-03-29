@@ -373,7 +373,7 @@ impl<'a> DerivationManager<'a> {
         Ok(self.current_state)
     }
 
-    pub fn reset_derivation(&self) -> Result<DerivationMetadata, ResetDerivationError> {
+    pub fn revert_derivation(&self) -> Result<DerivationMetadata, ResetDerivationError> {
         match self.current_state().get_state() {
             DerivationState::InProgress => {
                 let previous = self.current_state.get_previous();

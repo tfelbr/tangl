@@ -14,7 +14,7 @@ use std::io::Read;
 const FEATURES: &str = "features";
 const CONTINUE: &str = "continue";
 const ABORT: &str = "abort";
-const RESET: &str = "reset";
+const REVERT: &str = "revert";
 const OPTIMIZE: &str = "optimize";
 const UPDATE: &str = "update";
 const FROM_FILE: &str = "from_file";
@@ -211,11 +211,11 @@ impl CommandDefinition for DeriveCommand {
                     .action(ArgAction::SetTrue)
                     .exclusive(true)
                     .help("Abort the ongoing derivation process"),
-                Arg::new(RESET)
-                    .long(RESET)
+                Arg::new(REVERT)
+                    .long(REVERT)
                     .action(ArgAction::SetTrue)
                     .exclusive(true)
-                    .help("Reset the ongoing derivation process to the last step"),
+                    .help("Revert the ongoing derivation process to the last step"),
                 Arg::new(OPTIMIZE)
                     .short('o')
                     .long(OPTIMIZE)
@@ -265,9 +265,9 @@ impl CommandInterface for DeriveCommand {
             .arg_helper
             .get_argument_value::<bool>(UPDATE)
             .unwrap();
-        let reset = context
+        let revert = context
             .arg_helper
-            .get_argument_value::<bool>(RESET)
+            .get_argument_value::<bool>(REVERT)
             .unwrap();
         let file_path = context.arg_helper.get_argument_value::<String>(FROM_FILE);
 
@@ -275,15 +275,15 @@ impl CommandInterface for DeriveCommand {
         let mut derivation_manager =
             DerivationManager::new(&product_path, &context.git, &context.logger)?;
 
-        if reset {
+        if revert {
             let state = derivation_manager.get_current_state();
             let data = state.get_data().unwrap();
             if state.get_previous() == data.get_initial_commit() {
                 abort_derivation = true;
             } else {
-                let state = derivation_manager.reset_derivation()?;
+                let state = derivation_manager.revert_derivation()?;
                 context.logger.info(format!(
-                    "Reset to last state ({})",
+                    "Reverted to last state ({})",
                     state.get_previous()
                 ));
                 return Ok(())
