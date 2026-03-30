@@ -59,7 +59,7 @@ impl TreeDataModel {
         NodePath::<VirtualRoot>::new(
             vec![self.virtual_root.clone()],
             self.unknowns_exist.borrow().clone(),
-            PointsTo::Head,
+            VersionID::Head,
         )
     }
     pub fn get_node_path<T: SymbolicNodeType>(&self, path: &NormalizedPath) -> Option<NodePath<T>> {

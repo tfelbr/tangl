@@ -493,6 +493,31 @@ impl GitInterface {
         let out = self.raw_git_interface.run_attached(&command)?;
         Ok(output_to_result(out, &command)?)
     }
+
+    pub fn get_patch_delta<S1: Into<String>, S2: Into<String>>(
+        &self,
+        left: S1,
+        right: S2,
+    ) -> Result<Vec<CommitHash>, GitError> {
+        let left = left.into();
+        let right = right.into();
+        let command = vec!["cherry", left.as_str(), right.as_str()];
+        let out = self.raw_git_interface.run_attached(&command)?;
+        let response = output_to_result(out, &command)?;
+        let mut delta = vec![];
+        for line in response.split('\n') {
+            if line.contains("+") {
+                let hash = CommitHash::new(
+                    line
+                        .split("+ ")
+                        .collect::<Vec<&str>>()[1]
+                        .trim()
+                );
+                delta.push(hash);
+            }
+        };
+        Ok(delta)
+    }
 }
 
 #[cfg(test)]

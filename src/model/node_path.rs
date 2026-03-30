@@ -10,13 +10,13 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
-pub enum PointsTo {
+pub enum VersionID {
     Head,
     Commit(CommitHash),
     Tag(String),
 }
 
-impl PointsTo {
+impl VersionID {
     fn formatted(&self, colored: bool, current_head: CommitHash) -> String {
         fn make_head_info(head: &CommitHash) -> String {
             format!("(Head -> {head})")
@@ -55,7 +55,7 @@ impl PointsTo {
 pub struct NodePath<T: SymbolicNodeType> {
     path: Vec<Rc<RefCell<Node>>>,
     unknown_mode: bool,
-    points_to: PointsTo,
+    version_id: VersionID,
     _phantom: PhantomData<T>,
 }
 
@@ -101,17 +101,17 @@ impl<T: IsGitObject> NodePath<T> {
             .clone()
     }
     pub fn get_object(&self) -> String {
-        match &self.points_to {
-            PointsTo::Head => self.get_head().get_full_hash().clone(),
-            PointsTo::Commit(hash) => hash.get_full_hash().clone(),
-            PointsTo::Tag(tag) => tag.clone(),
+        match &self.version_id {
+            VersionID::Head => self.get_head().get_full_hash().clone(),
+            VersionID::Commit(hash) => hash.get_full_hash().clone(),
+            VersionID::Tag(tag) => tag.clone(),
         }
     }
     pub fn get_qualified_object(&self) -> String {
-        match &self.points_to {
-            PointsTo::Head => self.get_object(),
-            PointsTo::Commit(_) => self.get_object(),
-            PointsTo::Tag(_) => {
+        match &self.version_id {
+            VersionID::Head => self.get_object(),
+            VersionID::Commit(_) => self.get_object(),
+            VersionID::Tag(_) => {
                 todo!()
             }
         }
@@ -119,15 +119,15 @@ impl<T: IsGitObject> NodePath<T> {
     pub fn get_head(&self) -> CommitHash {
         self.get_metadata().get_head().unwrap().clone()
     }
-    pub fn get_version(&self) -> &PointsTo {
-        &self.points_to
+    pub fn get_version(&self) -> &VersionID {
+        &self.version_id
     }
-    pub fn update_version(&mut self, head: PointsTo) {
-        self.points_to = head;
+    pub fn update_version(&mut self, head: VersionID) {
+        self.version_id = head;
     }
     pub fn formatted_with_version(&self, colored: bool) -> String {
         let base = self.formatted(colored);
-        let version = self.points_to.formatted(colored, self.get_head());
+        let version = self.version_id.formatted(colored, self.get_head());
         format!("{base} {version}")
     }
     pub fn to_normalized_path_with_version(&self) -> NormalizedPath {
@@ -142,7 +142,7 @@ impl NodePath<AnyNode> {
         Self::new(
             other.path.clone(),
             other.unknown_mode,
-            other.points_to.clone(),
+            other.version_id.clone(),
         )
     }
 }
@@ -165,7 +165,7 @@ impl NodePath<ConcreteArea> {
             Some(NodePath::<FeatureRoot>::new(
                 vec![self.path[0].clone()],
                 self.unknown_mode,
-                PointsTo::Head,
+                VersionID::Head,
             ))
         } else {
             self.move_to(&NormalizedPath::from(FEATURE_ROOT))?
@@ -177,7 +177,7 @@ impl NodePath<ConcreteArea> {
             Some(NodePath::<ProductRoot>::new(
                 vec![self.path[0].clone()],
                 self.unknown_mode,
-                PointsTo::Head,
+                VersionID::Head,
             ))
         } else {
             self.move_to(&NormalizedPath::from(PRODUCT_ROOT))?
@@ -192,10 +192,10 @@ impl<T: SymbolicNodeType> ToNormalizedPath for NodePath<T> {
         for p in self.path.iter() {
             path.push(p.borrow().get_name());
         }
-        match &self.points_to {
-            PointsTo::Head => path.set_version_appendix::<String>(None),
-            PointsTo::Commit(hash) => path.set_version_appendix(Some(hash.get_full_hash())),
-            PointsTo::Tag(tag) => path.set_version_appendix(Some(tag)),
+        match &self.version_id {
+            VersionID::Head => path.set_version_appendix::<String>(None),
+            VersionID::Commit(hash) => path.set_version_appendix(Some(hash.get_full_hash())),
+            VersionID::Tag(tag) => path.set_version_appendix(Some(tag)),
         }
         path
     }
@@ -211,11 +211,11 @@ impl<T: SymbolicNodeType> NodePath<T> {
     pub fn get_node(&self) -> &Rc<RefCell<Node>> {
         self.path.last().unwrap()
     }
-    pub fn new(path: Vec<Rc<RefCell<Node>>>, unknown_mode: bool, head: PointsTo) -> NodePath<T> {
+    pub fn new(path: Vec<Rc<RefCell<Node>>>, unknown_mode: bool, head: VersionID) -> NodePath<T> {
         Self {
             path,
             unknown_mode,
-            points_to: head,
+            version_id: head,
             _phantom: PhantomData,
         }
     }
@@ -226,7 +226,7 @@ impl<T: SymbolicNodeType> NodePath<T> {
             Some(NodePath::<To>::new(
                 self.path.clone(),
                 self.unknown_mode,
-                self.points_to.clone(),
+                self.version_id.clone(),
             ))
         } else {
             None
@@ -241,18 +241,18 @@ impl<T: SymbolicNodeType> NodePath<T> {
         let head = match path.get_version_appendix() {
             Some(version) => {
                 if self.has_tag(version.clone()) {
-                    PointsTo::Tag(version)
+                    VersionID::Tag(version)
                 } else {
-                    PointsTo::Commit(CommitHash::new(version))
+                    VersionID::Commit(CommitHash::new(version))
                 }
             }
-            None => PointsTo::Head,
+            None => VersionID::Head,
         };
         Some(NodePath::<AnyNode>::new(self.path, self.unknown_mode, head))
     }
     pub fn move_to_index(self, index: usize) -> NodePath<AnyNode> {
         let path = self.path[0..index + 1].to_vec();
-        NodePath::<AnyNode>::new(path, self.unknown_mode, PointsTo::Head)
+        NodePath::<AnyNode>::new(path, self.unknown_mode, VersionID::Head)
     }
     pub fn has_children(&self) -> bool {
         self.get_node().borrow().has_children()
