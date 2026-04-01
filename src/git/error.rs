@@ -10,7 +10,10 @@ pub struct GitCommandError {
 }
 impl GitCommandError {
     pub fn new<S1: Into<String>, S2: Into<String>>(git_output: S1, msg: S2) -> GitCommandError {
-        GitCommandError { git_output: git_output.into(), msg: msg.into() }
+        GitCommandError {
+            git_output: git_output.into(),
+            msg: msg.into(),
+        }
     }
     pub fn get_git_output(&self) -> &String {
         &self.git_output

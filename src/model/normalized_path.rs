@@ -124,9 +124,7 @@ impl Index<usize> for NormalizedPath {
 
 impl NormalizedPath {
     pub fn new() -> Self {
-        Self {
-            path: Vec::new(),
-        }
+        Self { path: Vec::new() }
     }
     pub fn to_git_branch(&self) -> String {
         let trimmed_path = self.trim_whitespaces();
@@ -153,7 +151,9 @@ impl NormalizedPath {
         let last = self.last()?;
         if last.contains(VERSION_SEPARATOR) {
             Some(last.split(VERSION_SEPARATOR).collect::<Vec<_>>()[1].to_string())
-        } else { None }
+        } else {
+            None
+        }
     }
     pub fn set_version_appendix<S: Into<String>>(&mut self, version_appendix: Option<S>) {
         if let Some(version) = version_appendix {
@@ -180,7 +180,7 @@ impl NormalizedPath {
         self.strip_n(n, self.path.len())
     }
     pub fn strip_version(&self) -> NormalizedPath {
-        let mut new = self.clone(); 
+        let mut new = self.clone();
         new.set_version_appendix::<String>(None);
         new
     }

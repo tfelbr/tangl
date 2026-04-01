@@ -198,11 +198,9 @@ impl<B: IsGitObject, C: IsGitObject> MergeChainStatistic<B, C> {
     pub fn get_n_errors(&self) -> usize {
         let all: Vec<&MergeStatistic<C>> = self
             .iter_chain()
-            .filter(|s| {
-                match s.get_stat() {
-                    MergeResult::Error(_) => true,
-                    _ => false,
-                }
+            .filter(|s| match s.get_stat() {
+                MergeResult::Error(_) => true,
+                _ => false,
             })
             .collect();
         all.len()
@@ -322,12 +320,12 @@ impl MergeStatisticWeight {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct MergeStatistics<T: IsGitObject> {
+pub struct MergeStatisticComparator<T: IsGitObject> {
     statistics: Vec<MergeStatistic<T>>,
     weights: MergeStatisticWeight,
 }
 
-impl<T: IsGitObject> PartialOrd for MergeStatistics<T> {
+impl<T: IsGitObject> PartialOrd for MergeStatisticComparator<T> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         let my_weights = self.accumulate_weights();
         let their_weights = other.accumulate_weights();
@@ -335,13 +333,13 @@ impl<T: IsGitObject> PartialOrd for MergeStatistics<T> {
     }
 }
 
-impl<T: IsGitObject> Ord for MergeStatistics<T> {
+impl<T: IsGitObject> Ord for MergeStatisticComparator<T> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.partial_cmp(other).unwrap()
     }
 }
 
-impl<T: IsGitObject> MergeStatistics<T> {
+impl<T: IsGitObject> MergeStatisticComparator<T> {
     pub fn new(weights: MergeStatisticWeight) -> Self {
         Self {
             statistics: vec![],
@@ -383,10 +381,7 @@ pub struct ConflictChecker<'a> {
 }
 
 impl<'a> ConflictChecker<'a> {
-    pub fn new(
-        git: &'a GitInterface,
-        mode: CheckMode,
-    ) -> Self {
+    pub fn new(git: &'a GitInterface, mode: CheckMode) -> Self {
         Self { git, mode }
     }
 
@@ -404,14 +399,17 @@ impl<'a> ConflictChecker<'a> {
 
     pub fn check_permutations_against_base<B: IsGitObject, T: IsGitObject>(
         &self,
-        targets: &Vec<NodePath<T>>,
         base: &NodePath<B>,
+        keep: &Vec<NodePath<T>>,
+        shuffle: &Vec<NodePath<T>>,
         k: usize,
     ) -> impl Iterator<Item = Result<MergeChainStatistic<B, T>, PathAssertionError>> {
-        let iterator = targets
-            .iter()
-            .permutations(k)
-            .map(|target| self.check_chain(base, &target));
+        let iterator = shuffle.iter().permutations(k).map(|target| {
+            let mut chain = vec![];
+            chain.extend(keep.iter());
+            chain.extend(target.into_iter());
+            self.check_chain(base, &chain)
+        });
         iterator
     }
 
@@ -555,18 +553,19 @@ impl Conflict2DMatrix {
         base: &NodePath<B>,
         order: &Vec<NodePath<C>>,
     ) -> Option<MergeChainStatistic<B, C>> {
-        let mut final_path = vec![(
-            base.try_convert_to()?,
-            MergeStatistics::new(MergeStatisticWeight::Simple),
-        )];
+        let start = base.try_convert_to()?;
+        let mut final_path: Vec<(
+            NodePath<AnyGitObject>,
+            MergeStatisticComparator<AnyGitObject>,
+        )> = vec![];
         for path in order.iter() {
             let converted = path.try_convert_to()?;
             let voters = final_path.iter().map(|(k, _)| k.clone()).collect();
-            let votes = self.calculate_votes(&voters, &vec![converted.clone()]);
+            let votes = self.calculate_votes(&start, &voters, &vec![converted.clone()]);
             let vote = votes.get(&converted).unwrap();
             final_path.push((converted, vote.clone()));
         }
-        self.statistics_from_votes(&final_path)
+        self.statistics_from_votes(base.clone(), &final_path)
     }
 
     pub fn estimate_best_path<B: IsGitObject, C: IsGitObject>(
@@ -579,10 +578,13 @@ impl Conflict2DMatrix {
         if missing.len() == 0 {
             panic!("Path estimation does only work if there are more keys than the base itself.")
         }
-        let mut final_path = vec![(start, MergeStatistics::new(MergeStatisticWeight::Simple))];
+        let mut final_path: Vec<(
+            NodePath<AnyGitObject>,
+            MergeStatisticComparator<AnyGitObject>,
+        )> = vec![];
         while missing.len() > 0 {
             let voters = final_path.iter().map(|(k, _)| k.clone()).collect();
-            let votes = Self::reverse_votes(self.calculate_votes(&voters, &missing));
+            let votes = Self::reverse_votes(self.calculate_votes(&start, &voters, &missing));
             let max_vote = votes.keys().max().unwrap();
             let max_candidates = &votes[&max_vote];
             let winner = match max_candidates.len() {
@@ -612,18 +614,18 @@ impl Conflict2DMatrix {
             missing.remove(index);
             final_path.push((winner, max_vote.clone()));
         }
-        self.statistics_from_votes(&final_path)
+        self.statistics_from_votes(base_path.clone(), &final_path)
     }
 
     fn calculate_forward_compatibility(
         &self,
         element: &NodePath<AnyGitObject>,
         missing: &Vec<NodePath<AnyGitObject>>,
-    ) -> MergeStatistics<AnyGitObject> {
-        let table = &self.matrix[element];
-        let mut statistics = MergeStatistics::new(MergeStatisticWeight::Simple);
-        for statistic in table.iter().filter_map(|(k, v)| {
-            if missing.contains(k) {
+    ) -> MergeStatisticComparator<AnyGitObject> {
+        let row = &self.matrix[element];
+        let mut statistics = MergeStatisticComparator::new(MergeStatisticWeight::Simple);
+        for statistic in row.iter().filter_map(|(k, v)| {
+            if missing.contains(k) && k != element {
                 Some(v.clone())
             } else {
                 None
@@ -636,16 +638,30 @@ impl Conflict2DMatrix {
 
     fn calculate_votes(
         &self,
+        base: &NodePath<AnyGitObject>,
         voters: &Vec<NodePath<AnyGitObject>>,
         targets: &Vec<NodePath<AnyGitObject>>,
-    ) -> HashMap<NodePath<AnyGitObject>, MergeStatistics<AnyGitObject>> {
-        let mut votes: HashMap<NodePath<AnyGitObject>, MergeStatistics<AnyGitObject>> =
+    ) -> HashMap<NodePath<AnyGitObject>, MergeStatisticComparator<AnyGitObject>> {
+        let mut votes: HashMap<NodePath<AnyGitObject>, MergeStatisticComparator<AnyGitObject>> =
             HashMap::new();
         for candidate in targets.iter() {
-            let mut statistics = MergeStatistics::new(MergeStatisticWeight::Simple);
-            for p in voters.iter() {
-                let statistic = self.matrix[p].get(candidate).unwrap();
-                statistics.push(statistic.clone());
+            let mut statistics = MergeStatisticComparator::new(MergeStatisticWeight::Simple);
+            let by_base = self.matrix[base].get(candidate).unwrap();
+            if voters.is_empty() {
+                statistics.push(by_base.clone());
+            } else {
+                let mut include_base = true;
+                for voter in voters.iter() {
+                    let opinion_of_base = self.matrix[base].get(voter).unwrap();
+                    if opinion_of_base.get_stat() == &MergeResult::Success {
+                        include_base = false;
+                    }
+                    let statistic = self.matrix[voter].get(candidate).unwrap();
+                    statistics.push(statistic.clone());
+                }
+                if include_base {
+                    statistics.push(by_base.clone());
+                }
             }
             votes.insert(candidate.clone(), statistics);
         }
@@ -653,10 +669,12 @@ impl Conflict2DMatrix {
     }
 
     fn reverse_votes(
-        votes: HashMap<NodePath<AnyGitObject>, MergeStatistics<AnyGitObject>>,
-    ) -> HashMap<MergeStatistics<AnyGitObject>, Vec<NodePath<AnyGitObject>>> {
-        let mut reversed: HashMap<MergeStatistics<AnyGitObject>, Vec<NodePath<AnyGitObject>>> =
-            HashMap::new();
+        votes: HashMap<NodePath<AnyGitObject>, MergeStatisticComparator<AnyGitObject>>,
+    ) -> HashMap<MergeStatisticComparator<AnyGitObject>, Vec<NodePath<AnyGitObject>>> {
+        let mut reversed: HashMap<
+            MergeStatisticComparator<AnyGitObject>,
+            Vec<NodePath<AnyGitObject>>,
+        > = HashMap::new();
         for (path, vote) in votes.iter() {
             if reversed.contains_key(vote) {
                 reversed.get_mut(vote).unwrap().push(path.clone());
@@ -669,17 +687,19 @@ impl Conflict2DMatrix {
 
     fn statistics_from_votes<B: IsGitObject, C: IsGitObject>(
         &self,
-        votes: &Vec<(NodePath<AnyGitObject>, MergeStatistics<AnyGitObject>)>,
+        base: NodePath<B>,
+        votes: &Vec<(
+            NodePath<AnyGitObject>,
+            MergeStatisticComparator<AnyGitObject>,
+        )>,
     ) -> Option<MergeChainStatistic<B, C>> {
-        let mut chain_statistic = MergeChainStatistic::new(votes[0].0.try_convert_to()?);
-        for (index, (_, vote)) in votes.iter().enumerate() {
-            if index != 0 {
-                let lowest = vote.get_lowest();
-                chain_statistic.push(MergeStatistic::new(
-                    lowest.get_path().try_convert_to()?,
-                    lowest.get_stat().clone(),
-                ));
-            };
+        let mut chain_statistic = MergeChainStatistic::new(base);
+        for (_, vote) in votes.iter() {
+            let lowest = vote.get_lowest();
+            chain_statistic.push(MergeStatistic::new(
+                lowest.get_path().try_convert_to()?,
+                lowest.get_stat().clone(),
+            ));
         }
         Some(chain_statistic)
     }
@@ -702,53 +722,52 @@ impl<'a> ConflictAnalyzer<'a> {
     ) -> Result<Conflict2DMatrix, PathAssertionError> {
         let mut statistics = MergeChainStatistics::new();
 
+        let mut successful_with_base: Vec<NodePath<AnyGitObject>> = vec![];
         let mut conflicting_with_base: Vec<NodePath<AnyGitObject>> = vec![];
         self.logger.debug("Checking against base pairwise");
-        for s in self.checker.check_permutations_against_base(paths, base, 1) {
+        for s in self
+            .checker
+            .check_permutations_against_base(base, &vec![], paths, 1)
+        {
             let result = s?;
             self.logger.debug(result.display_as_path());
             statistics.push(result.clone());
+            let path = result.get(0).unwrap().get_path().clone();
             if result.contains_conflicts() {
-                conflicting_with_base
-                    .push(result.get(0).unwrap().get_path().clone());
+                conflicting_with_base.push(path);
+            } else {
+                successful_with_base.push(path);
             }
         }
-        let to_test_with_base: Vec<NodePath<AnyGitObject>> = paths
-            .iter()
-            .filter(|path| !conflicting_with_base.contains(&path))
-            .cloned()
-            .collect();
-        let to_test_without_base: Vec<NodePath<AnyGitObject>> = paths
-            .iter()
-            .filter(|path| conflicting_with_base.contains(&path))
-            .cloned()
-            .collect();
-        let to_test_against_without_base: Vec<NodePath<AnyGitObject>> = paths
-            .iter()
-            .filter(|path| !to_test_without_base.contains(&path))
-            .cloned()
-            .collect();
 
-        self.logger.debug("Checking successful against base");
-        for with_base in self
-            .checker
-            .check_permutations_against_base(&to_test_with_base, &base, 2)
-        {
-            let result = with_base?;
-            self.logger.debug(result.display_as_path());
-            let second = result.get(0).unwrap();
-            let third = result.get(1).unwrap();
-            let mut new = MergeChainStatistic::new(second.get_path().clone());
-            new.push(third.clone());
-            statistics.push(new);
+        self.logger.debug("Checking with successful against base");
+        for successful in successful_with_base.iter() {
+            for with_base in self.checker.check_permutations_against_base(
+                base,
+                &vec![successful.clone()],
+                paths,
+                1,
+            ) {
+                let result = with_base?;
+                self.logger.debug(result.display_as_path());
+                let second = result.get(0).unwrap();
+                let third = result.get(1).unwrap();
+                let mut new = MergeChainStatistic::new(second.get_path().clone());
+                new.push(third.clone());
+                statistics.push(new);
+            }
         }
-        self.logger.debug("Checking conflicting without base");
-        for without_base in self
-            .checker
-            .check_n_against_permutations(&to_test_without_base, &to_test_against_without_base, &1)
-        {
-            let result = without_base?;
-            statistics.push(result);
+
+        self.logger.debug("Checking conflicting");
+        for conflicting in conflicting_with_base.iter() {
+            for with_base in
+                self.checker
+                    .check_permutations_against_base(conflicting, &vec![], paths, 1)
+            {
+                let result = with_base?;
+                self.logger.debug(result.display_as_path());
+                statistics.push(result);
+            }
         }
         self.checker.clean_up();
         let matrix = Conflict2DMatrix::new(&statistics);

@@ -338,7 +338,7 @@ impl GitInterface {
 
     pub fn cherry_pick<B: IsGitObject, T: IsGitObject>(
         &self,
-        path: NodePath<T>
+        path: NodePath<T>,
     ) -> Result<(MergeChainStatistic<B, T>, String), PathAssertionError> {
         let current = self.assert_current_node_path::<B>()?;
         let object = path.get_qualified_object();

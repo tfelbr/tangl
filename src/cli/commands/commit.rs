@@ -36,19 +36,17 @@ fn handle_feature(
         .iter()
         .map(|f| {
             checker
-                .check_permutations_against_base(&vec![feature.clone()], f, 1)
+                .check_permutations_against_base(f, &vec![], &vec![feature.clone()], 1)
                 .collect::<Vec<_>>()
         })
         .flatten()
         .collect::<Result<_, _>>()?;
 
     if feature_statistics.n_conflicts() > 0 {
-        context
-            .logger
-            .warn(format!(
-                "\nWarning: Commit stands in conflict with {} other feature(s)",
-                feature_statistics.n_conflicts().to_string().red()
-            ));
+        context.logger.warn(format!(
+            "\nWarning: Commit stands in conflict with {} other feature(s)",
+            feature_statistics.n_conflicts().to_string().red()
+        ));
         for conflict in feature_statistics.iter_conflicts() {
             context
                 .logger
@@ -65,7 +63,7 @@ fn handle_feature(
         .iter()
         .map(|product| {
             checker
-                .check_permutations_against_base(&vec![feature.clone()], product, 1)
+                .check_permutations_against_base(product, &vec![], &vec![feature.clone()], 1)
                 .collect::<Vec<_>>()
         })
         .flatten()
@@ -113,8 +111,7 @@ fn handle_product(
             }
             _ => {}
         }
-        let new_pointer =
-            DerivationMetadata::new(state.get_commit().get_hash().clone(), None);
+        let new_pointer = DerivationMetadata::new(state.get_commit().get_hash().clone(), None);
         Ok(Some(CommitMetadataContainer::new(&new_pointer)?))
     } else {
         Ok(None)
@@ -146,9 +143,11 @@ impl CommandInterface for CommitCommand {
                 None
             };
         match maybe_message {
-            Some(message) => context
-                .git
-                .commit::<_, AnyGitObject>(&message, metadata.as_ref(), false, false)?,
+            Some(message) => {
+                context
+                    .git
+                    .commit::<_, AnyGitObject>(&message, metadata.as_ref(), false, false)?
+            }
             None => todo!(),
         };
         if let Some(feature) = current.try_convert_to::<ConcreteFeature>() {

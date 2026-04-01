@@ -1,4 +1,7 @@
-use crate::git::conflict::{CheckMode, ConflictAnalyzer, ConflictChecker, MergeChainStatistic, MergeResult, MergeStatistic, NormalizedMergeStatistic};
+use crate::git::conflict::{
+    CheckMode, ConflictAnalyzer, ConflictChecker, MergeChainStatistic, MergeResult, MergeStatistic,
+    NormalizedMergeStatistic,
+};
 use crate::git::error::PathAssertionError;
 use crate::git::interface::GitInterface;
 use crate::logging::TanglLogger;
@@ -57,7 +60,8 @@ impl DerivationData {
                     .map(|p| {
                         if let Some(feature) = features
                             .iter()
-                            .find(|f| f.get_path().strip_version() == p.strip_version()) {
+                            .find(|f| f.get_path().strip_version() == p.strip_version())
+                        {
                             mut_features.retain(|f| f != feature);
                             match feature.get_stat() {
                                 MergeResult::UpToDate => p.clone(),
@@ -215,12 +219,12 @@ impl<'a> DerivationManager<'a> {
     ) -> Result<String, DerivationCommitError> {
         let real_message = message.into();
         let container = CommitMetadataContainer::new(metadata)?;
-        Ok(self.git.commit::<_, ConcreteProduct>(real_message, Some(&container), true, true)?)
+        Ok(self
+            .git
+            .commit::<_, ConcreteProduct>(real_message, Some(&container), true, true)?)
     }
 
-    fn run_derivation_until_conflict(
-        &mut self,
-    ) -> Result<DerivationData, PathAssertionError> {
+    fn run_derivation_until_conflict(&mut self) -> Result<DerivationData, PathAssertionError> {
         let mut chain = MergeChainStatistic::<_, ConcreteFeature>::new(self.product.clone());
         chain.fill_from_normalized(self.current_state().get_missing().clone(), self.git)?;
         let mut new_state = self.current_state().clone();
@@ -302,7 +306,7 @@ impl<'a> DerivationManager<'a> {
                     );
                     let new_state = DerivationMetadata::new(
                         current_commit.get_hash().clone(),
-                        Some(new_data.clone())
+                        Some(new_data.clone()),
                     );
                     self.derivation_commit("Derivation start", &new_state)?;
                     self.current_state = new_state;
@@ -320,7 +324,7 @@ impl<'a> DerivationManager<'a> {
                 let new_data = self.run_derivation_until_conflict()?;
                 let metadata = DerivationMetadata::new(
                     current_commit.get_hash().clone(),
-                    Some(new_data.clone())
+                    Some(new_data.clone()),
                 );
                 let message = match new_data.get_state() {
                     DerivationState::InProgress => "Derivation progress",
@@ -331,8 +335,7 @@ impl<'a> DerivationManager<'a> {
                 if new_data.missing.len() > 0 {
                     let merging = new_data.missing.get(0).unwrap();
                     let path = self.git.assert_path(merging.get_path())?;
-                    self.git
-                        .merge::<ConcreteProduct, ConcreteFeature>(path)?;
+                    self.git.merge::<ConcreteProduct, ConcreteFeature>(path)?;
                 }
                 Ok(self.current_state().clone())
             }
@@ -352,10 +355,8 @@ impl<'a> DerivationManager<'a> {
             let mut new_state = self.current_state().clone();
             new_state.update_missing(&new_order.to_normalized());
             let current_commit = self.git.get_commit(&self.product)?;
-            let metadata = DerivationMetadata::new(
-                current_commit.get_hash().clone(),
-                Some(new_state.clone())
-            );
+            let metadata =
+                DerivationMetadata::new(current_commit.get_hash().clone(), Some(new_state.clone()));
             self.derivation_commit("Optimize order", &metadata)?;
             self.current_state = metadata;
         }

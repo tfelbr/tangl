@@ -57,7 +57,7 @@ impl<'a> InspectionManager<'a> {
         let last_commit = self.git.get_commit(product)?;
         get_last_commit(&last_commit, &self.git)
     }
-    
+
     pub fn get_last_derivation_update(
         &self,
         product: &NodePath<ConcreteProduct>,
@@ -69,7 +69,9 @@ impl<'a> InspectionManager<'a> {
             let current_commit = self.git.get_commit(product)?;
             let data = DerivationMetadata::new(
                 current_commit.get_hash().clone(),
-                Some(DerivationData::new_initial(current_commit.get_hash().clone())),
+                Some(DerivationData::new_initial(
+                    current_commit.get_hash().clone(),
+                )),
             );
             Ok(data)
         }

@@ -68,7 +68,7 @@ pub fn conflict_hint() -> String {
 fn initialize_hint(
     state: &DerivationState,
     optimize: bool,
-    derivation_manager: &mut DerivationManager,
+    derivation_manager: &DerivationManager,
     logger: &TanglLogger,
 ) -> Result<(), Box<dyn Error>> {
     match state {
@@ -282,11 +282,10 @@ impl CommandInterface for DeriveCommand {
                 abort_derivation = true;
             } else {
                 let state = derivation_manager.revert_derivation()?;
-                context.logger.info(format!(
-                    "Reverted to last state ({})",
-                    state.get_previous()
-                ));
-                return Ok(())
+                context
+                    .logger
+                    .info(format!("Reverted to last state ({})", state.get_previous()));
+                return Ok(());
             }
         }
 

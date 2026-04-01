@@ -34,7 +34,7 @@ fn run_checks(
                 let base = paths.get(0).unwrap().clone();
                 let rest = paths[1..].to_vec();
                 checker
-                    .check_permutations_against_base(&rest, &base, permutations)
+                    .check_permutations_against_base(&base, &vec![], &rest, permutations)
                     .collect()
             }
             (None, None, true, false) => {
