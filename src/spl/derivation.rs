@@ -103,7 +103,9 @@ impl DerivationData {
             self.missing.retain(|m| m.get_path() != feature);
             let new_state = if missing.get_stat() == &MergeResult::Conflict {
                 MergeResult::Success
-            } else { missing.get_stat().clone() };
+            } else {
+                missing.get_stat().clone()
+            };
             let new = NormalizedMergeStatistic::new(missing.get_path().clone(), new_state);
             self.completed.push(new)
         }

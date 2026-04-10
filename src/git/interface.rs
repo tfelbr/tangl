@@ -339,10 +339,15 @@ impl GitInterface {
     pub fn cherry_pick<B: IsGitObject, T: IsGitObject>(
         &self,
         path: NodePath<T>,
+        no_commit: bool,
     ) -> Result<(MergeChainStatistic<B, T>, String), PathAssertionError> {
         let current = self.assert_current_node_path::<B>()?;
         let object = path.get_qualified_object();
-        let command = vec!["cherry-pick", object.as_str()];
+        let command = if no_commit {
+            vec!["cherry-pick", "--no-commit", object.as_str()]
+        } else {
+            vec!["cherry-pick", object.as_str()]
+        };
         let out = self.raw_git_interface.run_attached(&command)?;
         let result = output_to_result(out, &command);
         let (status, response) = match result {
@@ -438,23 +443,22 @@ impl GitInterface {
         &self,
         branch: &NodePath<T>,
     ) -> Result<Vec<String>, GitError> {
-        let branch = branch.to_normalized_path().to_git_branch();
-        let command = vec!["ls-tree", "-r", "--name-only", branch.as_str()];
+        let object = branch.get_qualified_object();
+        let command = vec!["ls-tree", "-r", "--name-only", object.as_str()];
         let out = self.raw_git_interface.run_attached(&command)?;
         let message = output_to_result(out, &command)?;
         Ok(message.split("\n").map(|e| e.to_string()).collect())
     }
 
-    pub fn get_files_changed_by_commit<S: Into<String>>(
+    pub fn get_files_changed_by_commit(
         &self,
-        commit: S,
+        commit: &CommitHash,
     ) -> Result<Vec<String>, GitError> {
-        let commit_str = commit.into();
         let command = vec![
             "diff-tree",
             "--no-commit-id",
             "--name-only",
-            commit_str.as_str(),
+            commit.get_full_hash().as_str(),
             "-r",
         ];
         let out = self.raw_git_interface.run_attached(&command)?;

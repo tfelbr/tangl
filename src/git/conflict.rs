@@ -487,7 +487,7 @@ impl<'a> ConflictChecker<'a> {
                         statistic
                     }
                     CheckMode::CherryPick => {
-                        let (statistic, _) = self.git.cherry_pick::<Temporary, C>(path.clone())?;
+                        let (statistic, _) = self.git.cherry_pick::<Temporary, C>(path.clone(), false)?;
                         if statistic.contains_conflicts() || statistic.contains_up_to_date() {
                             self.git.abort_cherry_pick()?;
                             skip = true;
@@ -637,7 +637,10 @@ impl Conflict2DMatrix {
     fn calculate_votes(
         &self,
         base: &NodePath<AnyGitObject>,
-        voters: &Vec<(NodePath<AnyGitObject>, MergeStatisticComparator<AnyGitObject>)>,
+        voters: &Vec<(
+            NodePath<AnyGitObject>,
+            MergeStatisticComparator<AnyGitObject>,
+        )>,
         targets: &Vec<NodePath<AnyGitObject>>,
     ) -> HashMap<NodePath<AnyGitObject>, MergeStatisticComparator<AnyGitObject>> {
         let mut votes: HashMap<NodePath<AnyGitObject>, MergeStatisticComparator<AnyGitObject>> =

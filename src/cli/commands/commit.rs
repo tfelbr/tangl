@@ -49,9 +49,7 @@ fn handle_feature(
         ));
         for conflict in feature_statistics.iter_conflicts() {
             for line in conflict.display_as_list() {
-                context
-                    .logger
-                    .warn(format!("  {line}"));
+                context.logger.warn(format!("  {line}"));
             }
         }
     }
@@ -78,9 +76,7 @@ fn handle_feature(
         ));
         for conflict in product_statistics.iter_conflicts() {
             for line in conflict.display_as_list() {
-                context
-                    .logger
-                    .warn(format!("  {line}"));
+                context.logger.warn(format!("  {line}"));
             }
         }
     }
