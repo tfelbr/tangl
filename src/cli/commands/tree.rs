@@ -15,7 +15,7 @@ pub struct LSCommand;
 impl CommandDefinition for LSCommand {
     fn build_command(&self) -> Command {
         Command::new("ls")
-            .about("Displays the tree structure")
+            .about("List information about the repository tree")
             .disable_help_subcommand(true)
             .arg(Arg::new(TARGET).default_value("."))
             .arg(

@@ -11,7 +11,7 @@ pub struct StatusCommand;
 impl CommandDefinition for StatusCommand {
     fn build_command(&self) -> Command {
         Command::new("status")
-            .about("Shows details of a run")
+            .about("Show the working tree status")
             .after_help("More detail")
             .disable_help_subcommand(true)
     }
