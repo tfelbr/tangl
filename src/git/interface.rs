@@ -108,6 +108,7 @@ impl GitCLI {
 pub struct GitInterface {
     model: TreeDataModel,
     raw_git_interface: GitCLI,
+    repo_scanned: bool,
 }
 impl GitInterface {
     pub fn default() -> Self {
@@ -120,13 +121,10 @@ impl GitInterface {
 
     pub fn new(path: GitPath) -> Self {
         let raw_interface = GitCLI::new(path);
-        let mut interface = Self {
+        Self {
             model: TreeDataModel::new(),
             raw_git_interface: raw_interface,
-        };
-        match interface.update_complete_model() {
-            Ok(_) => interface,
-            Err(e) => panic!("{:?}", e),
+            repo_scanned: false,
         }
     }
 
@@ -134,7 +132,7 @@ impl GitInterface {
         self.raw_git_interface.colored(color);
     }
 
-    fn update_complete_model(&mut self) -> Result<(), io::Error> {
+    fn update_complete_model(&self) -> Result<(), io::Error> {
         let branch_command = vec!["branch", "--format=%(refname:short) %(objectname)"];
         let branch_output = self.raw_git_interface.run_attached(&branch_command)?;
         let all_branches: Vec<(String, String)> = String::from_utf8(branch_output.stdout)
@@ -168,7 +166,14 @@ impl GitInterface {
     }
 
     fn get_model(&self) -> &TreeDataModel {
-        &self.model
+        if !self.repo_scanned {
+            match self.update_complete_model() {
+                Ok(_) => &self.model,
+                Err(e) => panic!("{:?}", e),
+            }
+        } else {
+            &self.model
+        }
     }
 
     fn update_head_commit<T: IsGitObject>(&self, path: &NodePath<T>) -> Result<(), GitError> {
