@@ -223,7 +223,7 @@ impl GitInterface {
         &self,
     ) -> Result<NodePath<T>, PathAssertionError> {
         let current_qualified_path = self.get_current_normalized_path()?;
-        match self.model.assert_path::<T>(&current_qualified_path) {
+        match self.get_model().assert_path::<T>(&current_qualified_path) {
             Ok(path) => Ok(path),
             Err(error) => match error {
                 ModelError::WrongNodeType(_) => {
@@ -245,6 +245,13 @@ impl GitInterface {
     // all git commands
     pub fn initialize_repo(&self) -> Result<String, GitError> {
         let command = vec!["init", "--initial-branch=main"];
+        let out = self.raw_git_interface.run_attached(&command)?;
+        Ok(output_to_result(out, &command)?)
+    }
+
+    pub fn clone_repo<S: Into<String>>(&self, url: S) -> Result<String, GitError> {
+        let repo = url.into();
+        let command = vec!["clone", repo.as_str()];
         let out = self.raw_git_interface.run_attached(&command)?;
         Ok(output_to_result(out, &command)?)
     }

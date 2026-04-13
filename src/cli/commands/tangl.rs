@@ -30,6 +30,7 @@ impl CommandDefinition for TangleCommand {
             Box::new(CheckCommand),
             Box::new(CheckoutCommand),
             Box::new(InitCommand),
+            Box::new(CloneCommand),
             Box::new(FeatureCommand),
             Box::new(ProductCommand),
             Box::new(TagCommand),

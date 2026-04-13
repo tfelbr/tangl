@@ -12,6 +12,7 @@ mod tag;
 mod tangl;
 mod tree;
 mod untie;
+mod clone;
 
 pub use check::*;
 pub use checkout::*;
@@ -27,3 +28,4 @@ pub use tag::*;
 pub use tangl::*;
 pub use tree::*;
 pub use untie::*;
+pub use clone::*;
