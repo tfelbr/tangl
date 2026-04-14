@@ -35,7 +35,10 @@ impl CommandInterface for CloneCommand {
             for remote in remotes {
                 if !remote.contains("HEAD") {
                     let local = remote.replace("origin/", "");
-                    context.git.track_branch(&local, &remote)?;
+                    match context.git.track_branch(&local, &remote) {
+                        Ok(_) => {}
+                        Err(_) => {}
+                    };
                 }
             }
         } else {

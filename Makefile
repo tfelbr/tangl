@@ -9,8 +9,10 @@ test:
 	cargo llvm-cov
 
 example:
-	docker compose build
-	docker run -it --rm tangl:1
+	mkdir -p $(PWD)/target/example/construction-site-example
+	docker compose up -d && docker compose down
+	docker compose run --rm -t example bash
+	rm -rf target/example
 
 clean:
 	rm ~/.cargo/bin/tangl
