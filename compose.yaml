@@ -1,0 +1,4 @@
+services:
+  example:
+    image: tangl:1
+    build: .

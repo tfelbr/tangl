@@ -190,6 +190,13 @@ impl GitInterface {
         Ok(output_to_result(out, &command)?)
     }
 
+    pub fn get_remote_branches(&self) -> Result<Vec<String>, GitError> {
+        let command = vec!["branch", "--remotes"];
+        let out = self.raw_git_interface.run_attached(&command)?;
+        let result = output_to_result(out, &command)?;
+        Ok(result.trim().split("\n").map(|s| s.trim().to_string()).collect())
+    }
+
     pub fn get_current_normalized_path(&self) -> Result<NormalizedPath, GitError> {
         let mut base = NormalizedPath::from("");
         base.push(self.get_current_branch()?);
@@ -239,7 +246,7 @@ impl GitInterface {
     pub fn get_current_area(&self) -> Result<NodePath<ConcreteArea>, GitError> {
         let current_qualified_path = self.get_current_normalized_path()?;
         let qualified_path = NormalizedPath::from(&current_qualified_path[1]);
-        Ok(self.model.get_area(&qualified_path).unwrap())
+        Ok(self.get_model().get_area(&qualified_path).unwrap())
     }
 
     // all git commands
@@ -300,7 +307,7 @@ impl GitInterface {
             return Err(WrongNodeTypeError::new(message).into());
         }
         self.create_branch_no_mut(path)?;
-        Ok(self.model.get_node_path(&path).unwrap())
+        Ok(self.get_model().get_node_path(&path).unwrap())
     }
 
     pub(super) fn delete_branch_no_mut(&self, path: &NormalizedPath) -> Result<String, GitError> {
@@ -506,6 +513,12 @@ impl GitInterface {
 
     pub fn reset_hard(&self, commit: &CommitHash) -> Result<String, GitError> {
         let command = vec!["reset", "--hard", commit.get_full_hash()];
+        let out = self.raw_git_interface.run_attached(&command)?;
+        Ok(output_to_result(out, &command)?)
+    }
+
+    pub fn track_branch(&self, local: &String, remote: &String) -> Result<String, GitError> {
+        let command = vec!["branch", "--track", local, remote];
         let out = self.raw_git_interface.run_attached(&command)?;
         Ok(output_to_result(out, &command)?)
     }
