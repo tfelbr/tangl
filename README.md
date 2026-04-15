@@ -111,6 +111,7 @@ We provide a toy example inside a docker container, so you don't need to install
 
 **Requirements**
 - docker compose
+- docker buildx
 - make
 
 In the repository's root, run
@@ -127,6 +128,7 @@ You can use any editor/IDE to make modifications and use the container to run ``
 - Latest version of Rust and Cargo 1.x
 - bash for dynamic completion
 - ``~/.cargo/bin`` on your PATH
+- make
 
 In the repository's root, run
 ```bash
