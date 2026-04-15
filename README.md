@@ -41,10 +41,12 @@ main [area]
 
 - **Area**: the top most branch, used to organize the remaining structure underneath it.
     The first one is usually ``main`` or ``master``, but additional ones like ``develop`` are possible.
-- **Feature Root**: All ***feature*** branches are organized under this node.
-- **Product Root**: All ***product*** branches are organized under this node.
-- **Feature**: 
-- **Product**
+- **Feature Root**: All feature branches are organized under this node.
+- **Product Root**: All product branches are organized under this node.
+- **Feature**: Individual artifacts are stored on feature branches.
+    Nodes that do not have a branch are abstract and used for categorizing complex subtrees.
+- **Product**: Assembled products have their own branch.
+    Similar to features, nodes without branches can be used for categorizing.
 
 ### Mechanics
 
@@ -75,14 +77,14 @@ It applied throughout all commands.
 #### Consistency Preservation
 
 **tangl** attempts to preserve consistency between features and products using merge-tests and commit/patch comparison.
-Merge-tests can be executed manually via the ``test`` command, which test-merges branches to discover conflicts.
+Merge-tests can be executed manually via the ``tangl test`` command, which test-merges branches to discover conflicts.
 These checks are executed automatically as part of some other operations.
 
 #### Developing Features
 
 Feature development works similar to git.
 You checkout a feature branch, make modifications, and commit to it.
-You can add and remove features via the ``feature`` command.
+You can add and remove features via the ``tangl feature`` command.
 
 If you commit on a feature, this feature is test-merged against all others and you are notified if you introduced conflicts.
 
@@ -91,8 +93,8 @@ Currently, there is no explicit support, but we plan to use ***areas*** for that
 
 #### Deriving Products
 
-To assemble a product out of features, you first create a product via the ``product`` command.
-After checkout, you run the ``derive`` command and pass the features you like.
+To assemble a product out of features, you first create a product via the ``tangl product`` command.
+After checkout, you run the ``tangl derive`` command and pass the features you like.
 If you use bash, the command suggests features via auto-completion for you.
 
 Product derivation is a staged process.
@@ -102,11 +104,20 @@ This reduces follow-up conflicts and can recognize if fixes are already present 
 
 #### Updating Products
 
+If feature development progresses past a product, you might want to update it.
+Repeating the derivation command that generated this product issues an update operation.
+Alternatively, you can use ``tangl derive --update``.
+Either way, a new derivation process will be initiated.
+
 #### *Untying*: Moving Change from Product to Feature
+
+Commiting to a product branch allows you to do final adjustments or to fix bugs, for example.
+If these changes are important enough to be part of a feature, so other products can profit from them as well, you can use ``tangl untie``.
+This operation uses ``git cherry-pick`` to copy the chosen commit onto another feature.
 
 ## Getting Started
 
-### Running the Example in Docker
+### Testing the Tool in Docker
 We provide a toy example inside a docker container, so you don't need to install anything on your system to try it out.
 
 **Requirements**
@@ -123,14 +134,16 @@ This builds and spins up a docker container, containing the ``tangl`` binary and
 The container will expose the example repository under ``target/example`` in this repository's root.
 You can use any editor/IDE to make modifications and use the container to run ``tangl`` commands.
 
-### Local Build and Installation
+### Local Build, Installation and Development
+
 **Requirements:**
 - Latest version of Rust and Cargo 1.x
 - bash for dynamic completion
-- ``~/.cargo/bin`` on your PATH
+- ``~/.cargo/bin`` on your ``PATH``
 - make
+- llvm-cov (Only for test coverage)
 
-In the repository's root, run
+#### Build + Installation
 ```bash
 make
 ```
@@ -138,6 +151,16 @@ This builds the binary and installs it under ``~/.cargo/bin``.
 This also copies a script for bash completion into ``~/.local/share/bash-completion/completions``.
 
 Verify your installation by running ``tangl``.
-This should print a help.
+This should print the help.
 
-### For Developers:
+#### Development Environment
+
+We suggest using an IDE like VSCode or RustRover.
+They handle everything for you.
+
+#### Running Tests
+
+```bash
+make test
+```
+This runs all tests and provides a coverage report.
