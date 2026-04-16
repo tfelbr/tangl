@@ -1,11 +1,5 @@
 # tangl
 
-[//]: # (<p align="center">)
-
-[//]: # (  <img src="" alt="" />)
-
-[//]: # (</p>)
-
 Welcome to **tangl**, a tool to manage git repositories as feature models!
 
 ## How To Use
@@ -32,11 +26,18 @@ This is where **tangl** comes into play: it introduces a naming convention for b
 ```
 main [area]
 ├── feature [feature root]
-│   ├── foo [feature]
-│   └── bar [abstract feature (no branch)]
-│       └── baz [feature]
+│   └── manager [feature]
+│       ├── logger [feature]
+│       │   ├── simple [feature]
+│       │   └── verbose [feature]
+│       ├── machine <- abstract, no branch
+│       │   ├── crane [feature]
+│       │   └── excavator [feature]
+│       └── material <- abstract, no branch
+│           ├── concrete [feature]
+│           └── earth [feature]
 └── product [product root]
-    └── myproduct [product]
+    └── myprod [product]
 ```
 
 - **Area**: the top most branch, used to organize the remaining structure underneath it.
@@ -86,10 +87,21 @@ Feature development works similar to git.
 You checkout a feature branch, make modifications, and commit to it.
 You can add and remove features via the ``tangl feature`` command.
 
-If you commit on a feature, this feature is test-merged against all others and you are notified if you introduced conflicts.
+If you commit on a feature, this feature is test-merged against all others and its products, so you are notified if you introduced conflicts.
 
 Typical workflows involving branches like ``develop`` or ``release`` are possible in theory.
 Currently, there is no explicit support, but we plan to use ***areas*** for that.
+
+Example:
+```bash
+tangl checkout /main/feature/logger/simple # checkout simple logger
+## change something that conflicts with product and verbose ##
+tangl add .
+tangl commit -m "change with conflict"
+```
+<p>
+  <img src="assets/commit_warning.png" alt="Derivation Preview" />
+</p>
 
 #### Deriving Products
 
@@ -101,6 +113,17 @@ Product derivation is a staged process.
 **tangl** performs test-merges of all participating features at the start, so you get a preview of how many conflicts you can expect.
 When passing the ``-o/--optimize`` flag, it will attempt to optimize the merge order to move conflicts at the end of the chain.
 This reduces follow-up conflicts and can recognize if fixes are already present on the product or a feature.
+
+Example:
+```bash
+tangl checkout /main # checkout main to create product
+tangl product myprod # create product
+tangl checkout product/myprod # checkout product
+tangl derive manager/machine/crane manager/material/concrete manager/logger/simple --optimize
+```
+<p>
+  <img src="assets/derivation.png" alt="Derivation Preview" />
+</p>
 
 #### Updating Products
 
@@ -115,15 +138,27 @@ Commiting to a product branch allows you to do final adjustments or to fix bugs,
 If these changes are important enough to be part of a feature, so other products can profit from them as well, you can use ``tangl untie``.
 This operation uses ``git cherry-pick`` to copy the chosen commit onto another feature.
 
+Example:
+```bash
+tangl checkout /main/product/myprod # checkout product
+## change something ##
+tangl untie HEAD /main/feature/manager/logger/simple # copy commit to simple logger
+tangl commit -m "copied from product"
+```
+<p>
+  <img src="assets/untie_notice.png" alt="Untie notice" />
+</p>
+
 ## Getting Started
 
-### Testing the Tool in Docker
-We provide a toy example inside a docker container, so you don't need to install anything on your system to try it out.
+### Running the Example in Docker
+We provide the toy example of the sections above inside a docker container, so you don't need to install anything on your system to try it out.
 
 **Requirements**
 - docker compose
 - docker buildx
 - make
+- Python (to run the example code)
 
 In the repository's root, run
 ```bash
@@ -133,6 +168,9 @@ This builds and spins up a docker container, containing the ``tangl`` binary and
 
 The container will expose the example repository under ``target/example`` in this repository's root.
 You can use any editor/IDE to make modifications and use the container to run ``tangl`` commands.
+
+The example is written in Python, just use your local interpreter and execute the main.py.
+There are no dependencies.
 
 ### Local Build, Installation and Development
 
