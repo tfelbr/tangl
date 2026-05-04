@@ -176,6 +176,7 @@ There are no dependencies.
 
 **Requirements:**
 - Latest version of Rust and Cargo 1.x
+- git
 - bash for dynamic completion
 - ``~/.cargo/bin`` on your ``PATH``
 - make
