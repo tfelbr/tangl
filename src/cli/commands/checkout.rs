@@ -1,7 +1,7 @@
 use crate::cli::completion::*;
 use crate::cli::*;
-use crate::git::error::{InvalidPathError, PathAssertionError};
-use crate::model::{
+use crate::core::git::error::{InvalidPathError, PathAssertionError};
+use crate::core::model::{
     AnyGitObject, ByTypeFilteringNodePathTransformer, NodePathTransformer, NormalizedPath,
     ToNormalizedPath,
 };
@@ -57,7 +57,7 @@ impl CommandInterface for CheckoutCommand {
         } else {
             context.logger.info(format!(
                 "Switched to {} branch {}",
-                node_path.get_actual_type().get_formatted_name(),
+                node_path.get_real_type().get_formatted_name(),
                 node_path.to_string().blue(),
             ));
         }
@@ -82,7 +82,7 @@ impl CommandInterface for CheckoutCommand {
         }
         let transformer = ByTypeFilteringNodePathTransformer::<_, AnyGitObject>::new();
         let root = context.git.get_virtual_root();
-        let all_branches = transformer.transform(root.iter_children_req());
+        let all_branches = transformer.transform(root.iter_children_by_type_req());
         let result = match maybe_editing.unwrap().get_id().as_str() {
             "branch" => completion_helper.complete_normalized_paths(
                 context.git.get_current_normalized_path()?,

@@ -1,15 +1,16 @@
-use crate::model::error::WrongNodeTypeError;
-use crate::model::*;
+use crate::core::model::WrongNodeTypeError;
+use crate::core::model::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
 #[derive(Debug)]
-pub struct TreeDataModel {
+pub struct Repository {
     virtual_root: Rc<RefCell<Node>>,
     qualified_paths_with_branch: Vec<NormalizedPath>,
     unknowns_exist: RefCell<bool>,
 }
-impl TreeDataModel {
+
+impl Repository {
     pub fn new() -> Self {
         Self {
             virtual_root: Rc::new(RefCell::new(Node::new(
@@ -56,11 +57,7 @@ impl TreeDataModel {
         self.get_virtual_root().move_to_area(path)
     }
     pub fn get_virtual_root(&self) -> NodePath<VirtualRoot> {
-        NodePath::<VirtualRoot>::new(
-            vec![self.virtual_root.clone()],
-            self.unknowns_exist.borrow().clone(),
-            PointsTo::Head,
-        )
+        NodePath::<VirtualRoot>::new(vec![self.virtual_root.clone()], SymHead::Head)
     }
     pub fn get_node_path<T: SymbolicNodeType>(&self, path: &NormalizedPath) -> Option<NodePath<T>> {
         let initial_path = self.get_virtual_root();
@@ -88,7 +85,7 @@ impl TreeDataModel {
                     "NodeTypeError for {}: expected to be of type '{}', but is of type '{}'",
                     node_path,
                     T::identifier(),
-                    node_path.get_actual_type().get_type_name()
+                    node_path.get_real_type().get_type_name()
                 ))
                 .into())
             }

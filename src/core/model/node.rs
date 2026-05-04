@@ -1,112 +1,143 @@
-use crate::model::*;
+use crate::core::model::commit::CommitTag;
+use crate::core::model::*;
 use colored::{ColoredString, Colorize};
-use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
 use termtree::Tree;
+use thiserror::Error;
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
-pub struct CommitHash {
-    full_hash: String,
+pub const FEATURE_ROOT: &str = "feature";
+pub const PRODUCT_ROOT: &str = "product";
+pub const TEMPORARY: &str = "tmp";
+
+#[derive(Error, Debug)]
+pub struct WrongNodeTypeError {
+    types_expected: Vec<NodeType>,
+    type_found: NodeType,
 }
 
-impl Display for CommitHash {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.get_short_hash())
-    }
-}
-
-impl CommitHash {
-    pub fn new<S: Into<String>>(full_hash: S) -> Self {
-        let full = full_hash.into();
-        if full.len() < 8 {
-            panic!("Commit hash must be at least 8 characters long");
-        }
-        CommitHash { full_hash: full }
-    }
-    pub fn get_full_hash(&self) -> &String {
-        &self.full_hash
-    }
-    pub fn get_short_hash(&self) -> String {
-        self.full_hash[0..8].to_string()
-    }
-}
-
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
-pub struct CommitTag {
-    tag: String,
-    full_path: String,
-}
-
-impl CommitTag {
-    pub fn new<S: Into<String>>(full_path: S) -> Self {
-        let full_path = full_path.into();
-        let normalized = full_path.to_normalized_path();
-        let tag = normalized.last().unwrap().to_string();
-        CommitTag { tag, full_path }
-    }
-    pub fn get_full_path(&self) -> &String {
-        &self.full_path
-    }
-    pub fn get_tag(&self) -> &String {
-        &self.tag
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct BranchData {
-    branch: Option<String>,
-    head: Option<CommitHash>,
-}
-impl BranchData {
-    pub fn new(branch: Option<String>, head: Option<CommitHash>) -> Self {
-        Self { branch, head }
-    }
-    pub fn empty() -> Self {
+impl WrongNodeTypeError {
+    pub fn new(types_expected: Vec<NodeType>, type_found: NodeType) -> Self {
         Self {
-            branch: None,
-            head: None,
+            types_expected,
+            type_found,
         }
     }
-    pub fn has_branch(&self) -> bool {
-        self.branch.is_some()
-    }
-    pub fn get_branch(&self) -> Option<&String> {
-        self.branch.as_ref()
-    }
-    pub fn get_head(&self) -> Option<&CommitHash> {
-        self.head.as_ref()
+}
+
+impl Display for WrongNodeTypeError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        todo!()
     }
 }
 
 pub enum PayloadType {
-    Branch(BranchData),
+    Branch(String),
     Tag(CommitTag),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub enum NodeType {
+    VirtualRoot,
+    Area(bool),
+    FeatureRoot,
+    ProductRoot,
+    Feature(bool),
+    Product(bool),
+    Temporary(bool),
+    Unknown,
+}
+
+impl NodeType {
+    pub fn decide_next_type(&self, name: &str, branch: bool) -> NodeType {
+        match self {
+            Self::VirtualRoot => Self::Area(branch),
+            Self::Area(_) => match name {
+                FEATURE_ROOT => Self::FeatureRoot,
+                PRODUCT_ROOT => Self::ProductRoot,
+                TEMPORARY => Self::Temporary(branch),
+                _ => Self::Unknown,
+            },
+            Self::Feature(_) | Self::FeatureRoot => Self::Feature(branch),
+            Self::Product(_) | Self::ProductRoot => Self::Product(branch),
+            Self::Temporary(_) => Self::Temporary(branch),
+            Self::Unknown => Self::Unknown,
+        }
+    }
+
+    pub fn format_node_display(&self, name: ColoredString) -> ColoredString {
+        match self {
+            Self::Area(_) => name.yellow(),
+            Self::FeatureRoot => name.bright_purple(),
+            Self::Feature(_) => name.purple(),
+            Self::ProductRoot => name.truecolor(231, 100, 18),
+            Self::Product(_) => name.truecolor(231, 100, 18),
+            _ => name,
+        }
+    }
+
+    pub fn get_type_name(&self) -> String {
+        let name: &str = match self {
+            Self::VirtualRoot => "virtual root",
+            Self::Area => "area",
+            Self::FeatureRoot => "feature root",
+            Self::ProductRoot => "product root",
+            Self::Feature => "feature",
+            Self::Product => "product",
+            Self::Temporary => "temporary",
+            Self::Unknown => "",
+        };
+        name.to_string()
+    }
+
+    pub fn get_short_type_name(&self) -> String {
+        let name: &str = match self {
+            Self::VirtualRoot => "vr",
+            Self::Area => "a",
+            Self::FeatureRoot => "fr",
+            Self::ProductRoot => "pr",
+            Self::Feature => "f",
+            Self::Product => "p",
+            Self::Temporary => "temp",
+            Self::Unknown => "",
+        };
+        name.to_string()
+    }
+
+    pub fn get_formatted_name(&self) -> String {
+        self.format_node_display(self.get_type_name().normal())
+            .to_string()
+    }
+
+    pub fn get_formatted_short_name(&self) -> String {
+        self.format_node_display(self.get_short_type_name().normal())
+            .to_string()
+    }
 }
 
 #[derive(Debug)]
 pub struct Node {
     name: String,
     node_type: NodeType,
-    branch_data: BranchData,
+    branch: Option<String>,
     tags: Vec<CommitTag>,
     children: RefCell<HashMap<String, Rc<RefCell<Node>>>>,
 }
 
 impl Node {
-    pub fn new<S: Into<String>>(
-        name: S,
+    pub fn new (
+        name: String,
         node_type: NodeType,
-        branch_data: BranchData,
+        branch: Option<String>,
         tags: Vec<CommitTag>,
     ) -> Self {
         Self {
-            name: name.into(),
+            name,
             node_type,
-            branch_data,
+            branch,
             tags,
             children: RefCell::new(HashMap::new()),
         }
@@ -114,12 +145,12 @@ impl Node {
     fn update_type(&mut self, node_type: NodeType) {
         self.node_type = node_type;
     }
-    fn update_branch_data(&mut self, metadata: BranchData) {
-        self.branch_data = metadata;
+    fn update_branch(&mut self, branch: Option<String>) {
+        self.branch = branch;
     }
     fn build_display_tree(&self, show_tags: bool) -> Tree<String> {
         let mut formatted = ColoredString::from(self.name.clone());
-        if self.branch_data.has_branch() {
+        if self.branch.has_branch() {
             formatted = formatted.blue()
         }
         let type_display = match self.node_type {
@@ -173,7 +204,7 @@ impl Node {
                 let new_type = self.decide_child_type(real_name.clone(), &branch);
                 let child = self.get_child(real_name).unwrap();
                 child.borrow_mut().update_type(new_type.clone());
-                child.borrow_mut().update_branch_data(branch);
+                child.borrow_mut().update_branch(branch);
                 new_type
             }
             PayloadType::Tag(tag) => {
@@ -191,7 +222,7 @@ impl Node {
         &self.node_type
     }
     pub fn get_branch_data(&self) -> &BranchData {
-        &self.branch_data
+        &self.branch
     }
     pub fn get_tags(&self) -> &Vec<CommitTag> {
         &self.tags
@@ -234,12 +265,6 @@ impl Node {
     }
     pub fn add_tag(&mut self, tag: CommitTag) {
         self.tags.push(tag);
-    }
-    pub fn update_head_commit(&mut self, commit: CommitHash) {
-        self.branch_data.head = Some(commit);
-    }
-    pub fn as_qualified_path(&self) -> NormalizedPath {
-        NormalizedPath::from(self.name.clone())
     }
     pub fn display_tree(&self, show_tags: bool) -> String {
         self.build_display_tree(show_tags).to_string()

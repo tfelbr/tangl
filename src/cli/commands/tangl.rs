@@ -1,6 +1,6 @@
 use crate::cli::completion::CompletionHelper;
 use crate::cli::*;
-use crate::model::ImportFormat;
+use crate::core::model::ImportFormat;
 use clap::{Arg, Command};
 use std::error::Error;
 

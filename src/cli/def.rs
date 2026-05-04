@@ -1,8 +1,8 @@
 use crate::cli::ArgHelper;
 use crate::cli::completion::CompletionHelper;
-use crate::git::interface::GitInterface;
+use crate::core::model::ImportFormat;
+use crate::core::model::git::GitInterface;
 use crate::logging::TanglLogger;
-use crate::model::ImportFormat;
 use clap::{ArgMatches, Command};
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};

@@ -1,8 +1,58 @@
-use crate::git::error::GitError;
-use crate::git::interface::GitInterface;
-use crate::model::CommitHash;
+use crate::core::git::error::GitError;
+use crate::core::model::ToNormalizedPath;
+use crate::core::model::git::GitInterface;
+use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
 
 pub const METADATA_SEPARATOR: &str = "---metadata---";
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
+pub struct CommitHash {
+    full_hash: String,
+}
+
+impl Display for CommitHash {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.get_short_hash())
+    }
+}
+
+impl CommitHash {
+    pub fn new<S: Into<String>>(full_hash: S) -> Self {
+        let full = full_hash.into();
+        if full.len() < 8 {
+            panic!("Commit hash must be at least 8 characters long");
+        }
+        CommitHash { full_hash: full }
+    }
+    pub fn get_full_hash(&self) -> &String {
+        &self.full_hash
+    }
+    pub fn get_short_hash(&self) -> String {
+        self.full_hash[0..8].to_string()
+    }
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
+pub struct CommitTag {
+    tag: String,
+    full_path: String,
+}
+
+impl CommitTag {
+    pub fn new<S: Into<String>>(full_path: S) -> Self {
+        let full_path = full_path.into();
+        let normalized = full_path.to_normalized_path();
+        let tag = normalized.last().unwrap().to_string();
+        CommitTag { tag, full_path }
+    }
+    pub fn get_full_path(&self) -> &String {
+        &self.full_path
+    }
+    pub fn get_tag(&self) -> &String {
+        &self.tag
+    }
+}
 
 pub trait CommitMetadata
 where
@@ -26,22 +76,6 @@ where
                 .collect::<Vec<&str>>()[1];
             Some(Self::from_json(to_parse))
         }
-    }
-}
-
-pub struct Base {}
-
-impl CommitMetadata for Base {
-    fn header() -> String {
-        "".to_string()
-    }
-
-    fn from_json<S: Into<String>>(_content: S) -> serde_json::Result<Self> {
-        Ok(Self {})
-    }
-
-    fn to_json(&self) -> serde_json::Result<String> {
-        Ok("".to_string())
     }
 }
 

@@ -15,12 +15,10 @@ impl CommandDefinition for CloneCommand {
             .disable_help_subcommand(true)
             .arg_required_else_help(true)
             .args(vec![
-                Arg::new(REPOSITORY)
-                    .help("Repository url"),
-                Arg::new(TRACK)
-                    .long(TRACK)
-                    .action(ArgAction::SetTrue)
-                    .help("Setup tracking for all branches. Must be located within the repository."),
+                Arg::new(REPOSITORY).help("Repository url"),
+                Arg::new(TRACK).long(TRACK).action(ArgAction::SetTrue).help(
+                    "Setup tracking for all branches. Must be located within the repository.",
+                ),
             ])
     }
 }
@@ -28,7 +26,10 @@ impl CommandDefinition for CloneCommand {
 impl CommandInterface for CloneCommand {
     fn run_command(&self, context: &mut CommandContext) -> Result<(), Box<dyn Error>> {
         let repo = context.arg_helper.get_argument_value::<String>(REPOSITORY);
-        let track = context.arg_helper.get_argument_value::<bool>(TRACK).unwrap();
+        let track = context
+            .arg_helper
+            .get_argument_value::<bool>(TRACK)
+            .unwrap();
 
         if track {
             let remotes = context.git.get_remote_branches()?;

@@ -1,7 +1,7 @@
 use crate::cli::{ArgHelper, CommandContext, CommandImpl, CommandMap, VERBOSE};
-use crate::git::interface::{GitInterface, GitPath};
+use crate::core::model::ImportFormat;
+use crate::core::model::git::{GitInterface, GitPath};
 use crate::logging::TanglLogger;
-use crate::model::ImportFormat;
 use clap::ArgMatches;
 use log::LevelFilter;
 use std::error::Error;

@@ -1,5 +1,6 @@
 mod check;
 mod checkout;
+mod clone;
 mod commit;
 mod complete;
 mod derive;
@@ -12,10 +13,10 @@ mod tag;
 mod tangl;
 mod tree;
 mod untie;
-mod clone;
 
 pub use check::*;
 pub use checkout::*;
+pub use clone::*;
 pub use commit::*;
 pub use complete::*;
 pub use derive::*;
@@ -28,4 +29,3 @@ pub use tag::*;
 pub use tangl::*;
 pub use tree::*;
 pub use untie::*;
-pub use clone::*;

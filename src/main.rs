@@ -1,6 +1,6 @@
 use log::{LevelFilter, error, set_logger, set_max_level};
 use tangl::cli::{ArgSource, CommandRepository, TangleCommand};
-use tangl::git::interface::GitPath;
+use tangl::core::model::git::GitPath;
 use tangl::logging::PrintingLogger;
 
 fn main() {

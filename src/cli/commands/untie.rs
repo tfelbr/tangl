@@ -1,20 +1,20 @@
 use crate::cli::*;
-use crate::git::interface::GitInterface;
-use crate::model::*;
-use crate::spl::DerivationMetadata;
+use crate::core::DerivationMetadata;
+use crate::core::conflict::MergeResult;
+use crate::core::model::git::GitInterface;
+use crate::core::model::*;
 use clap::{Arg, Command};
-use std::error::Error;
 use itertools::Itertools;
-use crate::git::conflict::MergeResult;
+use std::error::Error;
 
 const COMMIT: &str = "commit";
 const FEATURE: &str = "feature";
 
 fn find_features_that_contain_files<'a>(
     commit: &'a CommitHash,
-    features: &'a Vec<NodePath<ConcreteFeature>>,
+    features: &'a Vec<NodePath<Feature>>,
     git_interface: &GitInterface,
-) -> Result<Vec<&'a NodePath<ConcreteFeature>>, Box<dyn Error>> {
+) -> Result<Vec<&'a NodePath<Feature>>, Box<dyn Error>> {
     let files_of_commit = git_interface.get_files_changed_by_commit(commit)?;
     let all = features
         .iter()
@@ -51,7 +51,7 @@ impl CommandDefinition for UntieCommand {
 
 impl CommandInterface for UntieCommand {
     fn run_command(&self, context: &mut CommandContext) -> Result<(), Box<dyn Error>> {
-        let product = context.git.assert_current_node_path::<ConcreteProduct>()?;
+        let product = context.git.assert_current_node_path::<Product>()?;
         let target_commit = context
             .arg_helper
             .get_argument_value::<String>(COMMIT)
@@ -91,13 +91,12 @@ impl CommandInterface for UntieCommand {
             .find_map(|data| DerivationMetadata::from_commit_message(data))
             .unwrap()?;
         let state = full_metadata.get_data().unwrap();
-        let all_features = context.git.assert_paths::<ConcreteFeature>(state.get_total())?;
+        let all_features = context.git.assert_paths::<Feature>(state.get_total())?;
 
-        let found = find_features_that_contain_files(commit.get_hash(), &all_features, &context.git)?;
-        let feature: NodePath<ConcreteFeature> = match maybe_feature {
-            Some(feature) => context
-                .git
-                .assert_path(&feature.to_normalized_path())?,
+        let found =
+            find_features_that_contain_files(commit.get_hash(), &all_features, &context.git)?;
+        let feature: NodePath<Feature> = match maybe_feature {
+            Some(feature) => context.git.assert_path(&feature.to_normalized_path())?,
             None => match found.len() {
                 0 => return Err(
                     "There are no features matching all changed files. Please choose one manually."
@@ -117,24 +116,32 @@ impl CommandInterface for UntieCommand {
         };
 
         let mut product_with_commit = product.clone();
-        product_with_commit.update_version(PointsTo::Commit(commit.get_hash().clone()));
-        context.logger.info(format!("Untying commit to {}", feature.formatted(true)));
+        product_with_commit.update_version(SymHead::Commit(commit.get_hash().clone()));
+        context
+            .logger
+            .info(format!("Untying commit to {}", feature.formatted(true)));
         context.git.checkout(&feature)?;
-        let (result, _) = context.git.cherry_pick::<ConcreteFeature, _>(product_with_commit, true)?;
+        let (result, _) = context
+            .git
+            .cherry_pick::<Feature, _>(product_with_commit, true)?;
         if result.contains_up_to_date() {
             context.logger.info("Skipped: feature is up-to-date.");
             context.git.checkout(&product)?;
         } else if result.contains_conflicts() {
-            context.logger.info("CONFLICT; Please fix all conflicts, then commit your changes.");
+            context
+                .logger
+                .info("CONFLICT; Please fix all conflicts, then commit your changes.");
         } else if result.contains_errors() {
             context.git.checkout(&product)?;
             let error = match result.get(0).unwrap().get_stat() {
                 MergeResult::Error(error) => error,
                 _ => unreachable!(),
             };
-            return Err(format!("Cannot untie: {error}").into())
+            return Err(format!("Cannot untie: {error}").into());
         } else {
-            context.logger.info("Please review the changes made and commit them afterwards.");
+            context
+                .logger
+                .info("Please review the changes made and commit them afterwards.");
         }
         Ok(())
     }

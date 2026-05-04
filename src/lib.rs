@@ -1,5 +1,3 @@
 pub mod cli;
-pub mod git;
+pub mod core;
 pub mod logging;
-pub mod model;
-pub mod spl;

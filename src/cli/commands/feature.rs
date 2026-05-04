@@ -1,6 +1,6 @@
 use crate::cli::completion::*;
 use crate::cli::*;
-use crate::model::*;
+use crate::core::model::*;
 use clap::{Arg, Command};
 use std::error::Error;
 
@@ -9,7 +9,7 @@ fn add_feature(
     context: &mut CommandContext,
 ) -> Result<(), Box<dyn Error>> {
     let node_path = context.git.assert_current_node_path::<AnyGitObject>()?;
-    let current_path = if let Some(path) = node_path.try_convert_to::<ConcreteFeature>() {
+    let current_path = if let Some(path) = node_path.try_convert_to::<Feature>() {
         path.to_normalized_path()
     } else if let Some(path) = node_path.as_any_type().try_convert_to::<ConcreteArea>() {
         path.get_path_to_feature_root()
@@ -20,7 +20,7 @@ fn add_feature(
     };
     drop(node_path);
     let target_path = current_path + feature;
-    let result = context.git.create_branch::<ConcreteFeature>(&target_path)?;
+    let result = context.git.create_branch::<Feature>(&target_path)?;
     context.logger.info(format!(
         "Created new {} {}",
         NodeType::ConcreteFeature.get_formatted_name(),
@@ -62,13 +62,13 @@ impl CommandInterface for FeatureCommand {
         match maybe_delete {
             Some(delete) => {
                 let current = context.git.assert_current_node_path::<AnyGitObject>()?;
-                let to_delete = if let Some(feature) = current.try_convert_to::<ConcreteFeature>() {
+                let to_delete = if let Some(feature) = current.try_convert_to::<Feature>() {
                     feature.to_normalized_path() + delete.to_normalized_path()
                 } else {
                     context.git.get_current_area()?.get_path_to_feature_root()
                         + delete.to_normalized_path()
                 };
-                delete_path::<ConcreteFeature>(&to_delete, context)?;
+                delete_path::<Feature>(&to_delete, context)?;
                 return Ok(());
             }
             None => {}
@@ -97,16 +97,15 @@ impl CommandInterface for FeatureCommand {
             Some(arg) => match arg.get_id().as_str() {
                 "delete" => {
                     let current = context.git.assert_current_node_path::<AnyGitObject>()?;
-                    let reference =
-                        if let Some(feature) = current.try_convert_to::<ConcreteFeature>() {
-                            feature.to_normalized_path()
-                        } else {
-                            feature_root.to_normalized_path()
-                        };
+                    let reference = if let Some(feature) = current.try_convert_to::<Feature>() {
+                        feature.to_normalized_path()
+                    } else {
+                        feature_root.to_normalized_path()
+                    };
                     completion_helper.complete_normalized_paths(
                         reference,
                         HasBranchFilteringNodePathTransformer::new(true)
-                            .transform(feature_root.iter_children_req())
+                            .transform(feature_root.iter_children_by_type_req())
                             .map(|path| path.to_normalized_path()),
                     )
                 }

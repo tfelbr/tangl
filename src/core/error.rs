@@ -1,4 +1,4 @@
-use crate::git::error::*;
+use crate::core::git::error::*;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 

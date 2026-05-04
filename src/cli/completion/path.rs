@@ -1,4 +1,4 @@
-use crate::model::NormalizedPath;
+use crate::core::model::NormalizedPath;
 use std::collections::HashSet;
 
 pub struct RelativePathCompleter {
@@ -77,7 +77,7 @@ impl RelativePathCompleter {
 
 #[cfg(test)]
 pub mod test_utils {
-    use crate::model::NormalizedPath;
+    use crate::core::model::NormalizedPath;
 
     pub fn setup_qualified_paths() -> Vec<NormalizedPath> {
         vec![

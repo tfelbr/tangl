@@ -1,6 +1,6 @@
 use crate::cli::completion::*;
 use crate::cli::*;
-use crate::model::*;
+use crate::core::model::*;
 use clap::{Arg, Command};
 use std::error::Error;
 
@@ -11,7 +11,7 @@ fn add_product(
     context: &mut CommandContext,
 ) -> Result<(), Box<dyn Error>> {
     let node_path = context.git.assert_current_node_path::<AnyGitObject>()?;
-    let current_path = if let Some(path) = node_path.try_convert_to::<ConcreteProduct>() {
+    let current_path = if let Some(path) = node_path.try_convert_to::<Product>() {
         path.to_normalized_path()
     } else if let Some(path) = node_path.as_any_type().try_convert_to::<ConcreteArea>() {
         path.get_path_to_product_root()
@@ -22,7 +22,7 @@ fn add_product(
     };
     drop(node_path);
     let target_path = current_path + product;
-    let result = context.git.create_branch::<ConcreteProduct>(&target_path)?;
+    let result = context.git.create_branch::<Product>(&target_path)?;
     context.logger.info(format!(
         "Created new {} {}",
         NodeType::ConcreteProduct.get_formatted_name(),
@@ -64,13 +64,13 @@ impl CommandInterface for ProductCommand {
         let maybe_product = context.arg_helper.get_argument_value::<String>(PRODUCT);
         if let Some(delete) = maybe_delete {
             let current = context.git.assert_current_node_path::<AnyGitObject>()?;
-            let to_delete = if let Some(product) = current.try_convert_to::<ConcreteProduct>() {
+            let to_delete = if let Some(product) = current.try_convert_to::<Product>() {
                 product.to_normalized_path() + delete.to_normalized_path()
             } else {
                 context.git.get_current_area()?.get_path_to_product_root()
                     + delete.to_normalized_path()
             };
-            delete_path::<ConcreteProduct>(&to_delete, context)?;
+            delete_path::<Product>(&to_delete, context)?;
         } else if maybe_product.is_some() {
             add_product(maybe_product.unwrap().to_normalized_path(), context)?;
         } else {
@@ -91,7 +91,7 @@ impl CommandInterface for ProductCommand {
                         Some(path) => completion_helper.complete_normalized_paths(
                             path.to_normalized_path(),
                             HasBranchFilteringNodePathTransformer::new(true)
-                                .transform(path.iter_children_req())
+                                .transform(path.iter_children_by_type_req())
                                 .map(|path| path.to_normalized_path()),
                         ),
                         None => {

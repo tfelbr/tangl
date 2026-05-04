@@ -1,4 +1,4 @@
-use crate::model::{NormalizedPath, ToNormalizedPath};
+use crate::core::model::{NormalizedPath, ToNormalizedPath};
 use serde::Deserialize;
 use serde_json::Value;
 use std::error::Error;

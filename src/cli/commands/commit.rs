@@ -1,9 +1,7 @@
 use crate::cli::*;
-use crate::git::conflict::{CheckMode, ConflictChecker, MergeChainStatistics};
-use crate::model::{
-    AnyGitObject, CommitMetadataContainer, ConcreteFeature, ConcreteProduct, NodePath,
-};
-use crate::spl::{DerivationMetadata, DerivationState, InspectionManager};
+use crate::core::conflict::{CheckMode, ConflictChecker, MergeChainStatistics};
+use crate::core::model::{AnyGitObject, CommitMetadataContainer, Feature, NodePath, Product};
+use crate::core::{DerivationMetadata, DerivationState, InspectionManager};
 use clap::{Arg, Command};
 use colored::Colorize;
 use std::error::Error;
@@ -11,13 +9,13 @@ use std::error::Error;
 const MESSAGE: &str = "message";
 
 fn handle_feature(
-    feature: &NodePath<ConcreteFeature>,
+    feature: &NodePath<Feature>,
     inspector: &InspectionManager,
     context: &CommandContext,
 ) -> Result<Option<CommitMetadataContainer>, Box<dyn Error>> {
     let checker = ConflictChecker::new(&context.git, CheckMode::Merge);
     let area = context.git.get_current_area()?;
-    let all_features: Vec<NodePath<ConcreteFeature>> = area
+    let all_features: Vec<NodePath<Feature>> = area
         .clone()
         .move_to_feature_root()
         .unwrap()
@@ -32,7 +30,7 @@ fn handle_feature(
         .collect();
     let all_products = inspector.find_products_containing_feature(&feature)?;
 
-    let feature_statistics: MergeChainStatistics<ConcreteFeature, ConcreteFeature> = all_features
+    let feature_statistics: MergeChainStatistics<Feature, Feature> = all_features
         .iter()
         .map(|f| {
             checker
@@ -59,7 +57,7 @@ fn handle_feature(
             .warn(format!("  {}", error.display_as_path()));
     }
 
-    let product_statistics: MergeChainStatistics<ConcreteProduct, ConcreteFeature> = all_products
+    let product_statistics: MergeChainStatistics<Product, Feature> = all_products
         .iter()
         .map(|product| {
             checker
@@ -89,7 +87,7 @@ fn handle_feature(
 }
 
 fn handle_product(
-    product: &NodePath<ConcreteProduct>,
+    product: &NodePath<Product>,
     inspector: &InspectionManager,
     context: &CommandContext,
 ) -> Result<Option<CommitMetadataContainer>, Box<dyn Error>> {
@@ -137,7 +135,7 @@ impl CommandInterface for CommitCommand {
         context.git.colored_output(true);
         let inspector = InspectionManager::new(&context.git);
         let metadata: Option<CommitMetadataContainer> =
-            if let Some(product) = current.try_convert_to::<ConcreteProduct>() {
+            if let Some(product) = current.try_convert_to::<Product>() {
                 handle_product(&product, &inspector, &context)?
             } else {
                 None
@@ -150,7 +148,7 @@ impl CommandInterface for CommitCommand {
             }
             None => todo!(),
         };
-        if let Some(feature) = current.try_convert_to::<ConcreteFeature>() {
+        if let Some(feature) = current.try_convert_to::<Feature>() {
             handle_feature(&feature, &inspector, &context)?;
         }
         Ok(())

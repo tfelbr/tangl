@@ -1,4 +1,4 @@
-use crate::model::{ModelError, PathNotFoundError, WrongNodeTypeError};
+use crate::core::model::{ModelError, PathNotFoundError, WrongNodeTypeError};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::io;

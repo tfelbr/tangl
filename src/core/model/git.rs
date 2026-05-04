@@ -1,6 +1,6 @@
-use crate::git::conflict::*;
-use crate::git::error::*;
-use crate::model::*;
+use crate::core::conflict::*;
+use crate::core::git::error::*;
+use crate::core::model::*;
 use std::io;
 use std::path::PathBuf;
 use std::process::{Command, ExitStatus, Output};
@@ -56,7 +56,7 @@ pub enum GitPath {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct GitCLI {
+pub struct GitCLI {
     path: GitPath,
     colored: bool,
 }
@@ -106,7 +106,7 @@ impl GitCLI {
 
 #[derive(Debug)]
 pub struct GitInterface {
-    model: TreeDataModel,
+    model: Repository,
     raw_git_interface: GitCLI,
     repo_scanned: bool,
 }
@@ -122,7 +122,7 @@ impl GitInterface {
     pub fn new(path: GitPath) -> Self {
         let raw_interface = GitCLI::new(path);
         Self {
-            model: TreeDataModel::new(),
+            model: Repository::new(),
             raw_git_interface: raw_interface,
             repo_scanned: false,
         }
@@ -165,7 +165,7 @@ impl GitInterface {
         Ok(())
     }
 
-    fn get_model(&self) -> &TreeDataModel {
+    fn get_model(&self) -> &Repository {
         if !self.repo_scanned {
             match self.update_complete_model() {
                 Ok(_) => &self.model,
@@ -194,7 +194,11 @@ impl GitInterface {
         let command = vec!["branch", "--remotes"];
         let out = self.raw_git_interface.run_attached(&command)?;
         let result = output_to_result(out, &command)?;
-        Ok(result.trim().split("\n").map(|s| s.trim().to_string()).collect())
+        Ok(result
+            .trim()
+            .split("\n")
+            .map(|s| s.trim().to_string())
+            .collect())
     }
 
     pub fn get_current_normalized_path(&self) -> Result<NormalizedPath, GitError> {
@@ -269,7 +273,7 @@ impl GitInterface {
         Ok(output_to_result(out, &command)?)
     }
 
-    pub(super) fn checkout_raw(&self, path: &NormalizedPath) -> Result<String, GitError> {
+    pub(crate) fn checkout_raw(&self, path: &NormalizedPath) -> Result<String, GitError> {
         let branch = path.to_git_branch();
         let command = vec!["checkout", branch.as_str()];
         let out = self.raw_git_interface.run_attached(&command)?;
@@ -310,7 +314,7 @@ impl GitInterface {
         Ok(self.get_model().get_node_path(&path).unwrap())
     }
 
-    pub(super) fn delete_branch_no_mut(&self, path: &NormalizedPath) -> Result<String, GitError> {
+    pub(crate) fn delete_branch_no_mut(&self, path: &NormalizedPath) -> Result<String, GitError> {
         let branch = path.to_git_branch();
         let command = vec!["branch", "-D", branch.as_str()];
         let out = self.raw_git_interface.run_attached(&command)?;
@@ -526,8 +530,8 @@ impl GitInterface {
 
 #[cfg(test)]
 pub mod test_utils {
-    use crate::git::error::GitError;
-    use crate::git::interface::GitCLI;
+    use crate::core::git::error::GitError;
+    use crate::core::model::git::GitCLI;
     use std::fs;
     use std::path::PathBuf;
 
@@ -569,7 +573,7 @@ pub mod test_utils {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::git::interface::test_utils::{populate_with_features, prepare_empty_git_repo};
+    use crate::core::model::git::test_utils::{populate_with_features, prepare_empty_git_repo};
     use tempfile::TempDir;
 
     #[test]

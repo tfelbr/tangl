@@ -1,6 +1,6 @@
 use crate::cli::ArgHelper;
 use crate::cli::completion::RelativePathCompleter;
-use crate::model::NormalizedPath;
+use crate::core::model::NormalizedPath;
 use clap::parser::ValueSource;
 use clap::{Arg, ArgAction, ArgMatches, Command};
 use std::ops::Range;

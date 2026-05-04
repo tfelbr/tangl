@@ -1,7 +1,7 @@
-use crate::git::error::GitError;
-use crate::git::interface::GitInterface;
-use crate::model::*;
-use crate::spl::{DerivationCommit, DerivationData, DerivationMetadata};
+use crate::core::git::error::GitError;
+use crate::core::model::git::GitInterface;
+use crate::core::model::*;
+use crate::core::{DerivationCommit, DerivationData, DerivationMetadata};
 use std::error::Error;
 
 pub struct InspectionManager<'a> {
@@ -15,7 +15,7 @@ impl<'a> InspectionManager<'a> {
 
     pub fn get_last_derivation_commit(
         &self,
-        product: &NodePath<ConcreteProduct>,
+        product: &NodePath<Product>,
     ) -> Result<Option<DerivationCommit>, Box<dyn Error>> {
         fn get_last_commit(
             commit: &Commit,
@@ -60,7 +60,7 @@ impl<'a> InspectionManager<'a> {
 
     pub fn get_last_derivation_update(
         &self,
-        product: &NodePath<ConcreteProduct>,
+        product: &NodePath<Product>,
     ) -> Result<DerivationMetadata, Box<dyn Error>> {
         let last_commit = self.get_last_derivation_commit(&product)?;
         if let Some(last_commit) = last_commit {
@@ -79,7 +79,7 @@ impl<'a> InspectionManager<'a> {
 
     pub fn get_last_derivation_state(
         &self,
-        product: &NodePath<ConcreteProduct>,
+        product: &NodePath<Product>,
     ) -> Result<DerivationData, Box<dyn Error>> {
         let last = self.get_last_derivation_update(product)?;
         Ok(last.get_data().unwrap().clone())
@@ -87,12 +87,12 @@ impl<'a> InspectionManager<'a> {
 
     pub fn find_products_containing_feature(
         &self,
-        feature: &NodePath<ConcreteFeature>,
-    ) -> Result<Vec<NodePath<ConcreteProduct>>, Box<dyn Error>> {
+        feature: &NodePath<Feature>,
+    ) -> Result<Vec<NodePath<Product>>, Box<dyn Error>> {
         if let Some(product_root) = feature.clone().move_to_area().move_to_product_root() {
-            let mut products: Vec<NodePath<ConcreteProduct>> = vec![];
+            let mut products: Vec<NodePath<Product>> = vec![];
             for product in product_root.iter_products_req() {
-                if let Some(concrete) = product.try_convert_to::<ConcreteProduct>() {
+                if let Some(concrete) = product.try_convert_to::<Product>() {
                     let state = self.get_last_derivation_state(&concrete)?;
                     let features: Vec<NormalizedPath> = state.get_total_without_versions();
                     if features.contains(&feature.to_normalized_path().strip_version()) {

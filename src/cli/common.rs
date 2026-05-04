@@ -1,5 +1,5 @@
 use crate::cli::CommandContext;
-use crate::model::{IsGitObject, NormalizedPath};
+use crate::core::model::{IsGitObject, NormalizedPath};
 use clap::{Arg, ArgAction};
 use colored::Colorize;
 use std::error::Error;
@@ -40,7 +40,7 @@ pub fn delete_path<T: IsGitObject>(
 ) -> Result<(), Box<dyn Error>> {
     match context.git.assert_path::<T>(&path) {
         Ok(concrete_path) => {
-            let concrete_type = concrete_path.get_actual_type().clone();
+            let concrete_type = concrete_path.get_real_type().clone();
             context.git.delete_branch(concrete_path)?;
             context.logger.info(format!(
                 "Deleted {} branch {}",

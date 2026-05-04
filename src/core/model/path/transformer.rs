@@ -1,4 +1,4 @@
-use crate::model::*;
+use crate::core::model::*;
 use globset::{GlobBuilder, GlobMatcher};
 use std::marker::PhantomData;
 

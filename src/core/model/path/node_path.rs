@@ -1,22 +1,41 @@
-use crate::model::*;
+use crate::core::model::*;
 use colored::Colorize;
 use itertools::Itertools;
-use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::rc::Rc;
+use thiserror::Error;
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
-pub enum PointsTo {
+#[derive(Error, Debug)]
+#[error("Path {path} des not exist.")]
+pub struct PathNotFoundError {
+    path: NormalizedPath,
+}
+impl PathNotFoundError {
+    pub fn new(path: NormalizedPath) -> Self {
+        Self { path }
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum NodePathError {
+    #[error(transparent)]
+    WrongType(#[from] WrongNodeTypeError),
+    #[error(transparent)]
+    NotFound(#[from] PathNotFoundError),
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Ord, PartialOrd)]
+pub enum SymHead {
     Head,
     Commit(CommitHash),
     Tag(String),
 }
 
-impl PointsTo {
+impl SymHead {
     fn formatted(&self, colored: bool, current_head: CommitHash) -> String {
         fn make_head_info(head: &CommitHash) -> String {
             format!("(Head -> {head})")
@@ -54,8 +73,8 @@ impl PointsTo {
 #[derive(Clone, Debug)]
 pub struct NodePath<T: SymbolicNodeType> {
     path: Vec<Rc<RefCell<Node>>>,
-    unknown_mode: bool,
-    points_to: PointsTo,
+    sym_head: SymHead,
+    git: Rc<GitCLI>,
     _phantom: PhantomData<T>,
 }
 
@@ -64,10 +83,11 @@ impl<T: HasFeatureChildren> NodePath<T> {
         self.move_to(path)?.try_convert_to()
     }
     pub fn iter_features(&self) -> impl Iterator<Item = NodePath<Feature>> {
-        self.iter_children().map(|p| p.try_convert_to().unwrap())
+        self.iter_children_by_type()
+            .map(|p| p.try_convert_to().unwrap())
     }
     pub fn iter_features_req(&self) -> impl Iterator<Item = NodePath<Feature>> {
-        self.iter_children_req()
+        self.iter_children_by_type_req()
             .map(|p| p.try_convert_to().unwrap())
     }
 }
@@ -77,17 +97,18 @@ impl<T: HasProductChildren> NodePath<T> {
         self.move_to(path)?.try_convert_to()
     }
     pub fn iter_products(&self) -> impl Iterator<Item = NodePath<Product>> {
-        self.iter_children().map(|p| p.try_convert_to().unwrap())
+        self.iter_children_by_type()
+            .map(|p| p.try_convert_to().unwrap())
     }
     pub fn iter_products_req(&self) -> impl Iterator<Item = NodePath<Product>> {
-        self.iter_children_req()
+        self.iter_children_by_type_req()
             .map(|p| p.try_convert_to().unwrap())
     }
 }
 
 impl<T: IsOnOrUnderArea> NodePath<T> {
-    pub fn move_to_area(self) -> NodePath<ConcreteArea> {
-        self.move_to_index(1).try_convert_to().unwrap()
+    pub fn move_to_area(self) -> NodePath<Area> {
+        self.move_to_index(1).unwrap()
     }
 }
 
@@ -101,17 +122,17 @@ impl<T: IsGitObject> NodePath<T> {
             .clone()
     }
     pub fn get_object(&self) -> String {
-        match &self.points_to {
-            PointsTo::Head => self.get_head().get_full_hash().clone(),
-            PointsTo::Commit(hash) => hash.get_full_hash().clone(),
-            PointsTo::Tag(tag) => tag.clone(),
+        match &self.sym_head {
+            SymHead::Head => self.get_head().get_full_hash().clone(),
+            SymHead::Commit(hash) => hash.get_full_hash().clone(),
+            SymHead::Tag(tag) => tag.clone(),
         }
     }
     pub fn get_qualified_object(&self) -> String {
-        match &self.points_to {
-            PointsTo::Head => self.get_object(),
-            PointsTo::Commit(_) => self.get_object(),
-            PointsTo::Tag(_) => {
+        match &self.sym_head {
+            SymHead::Head => self.get_object(),
+            SymHead::Commit(_) => self.get_object(),
+            SymHead::Tag(_) => {
                 todo!()
             }
         }
@@ -119,31 +140,21 @@ impl<T: IsGitObject> NodePath<T> {
     pub fn get_head(&self) -> CommitHash {
         self.get_metadata().get_head().unwrap().clone()
     }
-    pub fn get_version(&self) -> &PointsTo {
-        &self.points_to
+    pub fn get_version(&self) -> &SymHead {
+        &self.sym_head
     }
-    pub fn update_version(&mut self, head: PointsTo) {
-        self.points_to = head;
+    pub fn update_version(&mut self, head: SymHead) {
+        self.sym_head = head;
     }
     pub fn formatted_with_version(&self, colored: bool) -> String {
         let base = self.formatted(colored);
-        let version = self.points_to.formatted(colored, self.get_head());
+        let version = self.sym_head.formatted(colored, self.get_head());
         format!("{base} {version}")
     }
     pub fn to_normalized_path_with_version(&self) -> NormalizedPath {
         let mut path = self.to_normalized_path();
         path.set_version_appendix(Some(self.get_object()));
         path
-    }
-}
-
-impl NodePath<AnyNode> {
-    pub fn from_concrete<T: SymbolicNodeType>(other: &NodePath<T>) -> Self {
-        Self::new(
-            other.path.clone(),
-            other.unknown_mode,
-            other.points_to.clone(),
-        )
     }
 }
 
@@ -161,28 +172,12 @@ impl NodePath<ConcreteArea> {
         self.to_normalized_path() + NormalizedPath::from(PRODUCT_ROOT)
     }
     pub fn move_to_feature_root(self) -> Option<NodePath<FeatureRoot>> {
-        if self.unknown_mode {
-            Some(NodePath::<FeatureRoot>::new(
-                vec![self.path[0].clone()],
-                self.unknown_mode,
-                PointsTo::Head,
-            ))
-        } else {
-            self.move_to(&NormalizedPath::from(FEATURE_ROOT))?
-                .try_convert_to()
-        }
+        self.move_to(&NormalizedPath::from(FEATURE_ROOT))?
+            .try_convert_to()
     }
     pub fn move_to_product_root(self) -> Option<NodePath<ProductRoot>> {
-        if self.unknown_mode {
-            Some(NodePath::<ProductRoot>::new(
-                vec![self.path[0].clone()],
-                self.unknown_mode,
-                PointsTo::Head,
-            ))
-        } else {
-            self.move_to(&NormalizedPath::from(PRODUCT_ROOT))?
-                .try_convert_to()
-        }
+        self.move_to(&NormalizedPath::from(PRODUCT_ROOT))?
+            .try_convert_to()
     }
 }
 
@@ -192,10 +187,10 @@ impl<T: SymbolicNodeType> ToNormalizedPath for NodePath<T> {
         for p in self.path.iter() {
             path.push(p.borrow().get_name());
         }
-        match &self.points_to {
-            PointsTo::Head => path.set_version_appendix::<String>(None),
-            PointsTo::Commit(hash) => path.set_version_appendix(Some(hash.get_full_hash())),
-            PointsTo::Tag(tag) => path.set_version_appendix(Some(tag)),
+        match &self.sym_head {
+            SymHead::Head => path.set_version_appendix::<String>(None),
+            SymHead::Commit(hash) => path.set_version_appendix(Some(hash.get_full_hash())),
+            SymHead::Tag(tag) => path.set_version_appendix(Some(tag)),
         }
         path
     }
@@ -211,69 +206,83 @@ impl<T: SymbolicNodeType> NodePath<T> {
     pub fn get_node(&self) -> &Rc<RefCell<Node>> {
         self.path.last().unwrap()
     }
-    pub fn new(path: Vec<Rc<RefCell<Node>>>, unknown_mode: bool, head: PointsTo) -> NodePath<T> {
-        Self {
+    pub(in crate::core::model) fn new(
+        path: Vec<Rc<RefCell<Node>>>,
+        sym_head: SymHead,
+        git: Rc<GitCLI>,
+    ) -> Result<NodePath<T>, WrongNodeTypeError> {
+        let last = path.last().unwrap();
+        let node = last.borrow();
+        if !T::is_compatible(&node) {
+            return Err(WrongNodeTypeError::new())
+        }
+        let new = Self {
             path,
-            unknown_mode,
-            points_to: head,
+            sym_head,
+            git,
             _phantom: PhantomData,
-        }
+        };
+        Ok(new)
     }
-    pub fn try_convert_to<To: SymbolicNodeType>(&self) -> Option<NodePath<To>> {
-        let compatible =
-            self.unknown_mode || To::is_compatible(self.get_node().borrow().get_type());
-        if compatible {
-            Some(NodePath::<To>::new(
-                self.path.clone(),
-                self.unknown_mode,
-                self.points_to.clone(),
-            ))
-        } else {
-            None
-        }
+    pub fn try_convert_to<To: SymbolicNodeType>(&self) -> Result<NodePath<To>, WrongNodeTypeError> {
+        NodePath::<To>::new(
+            self.path.clone(),
+            self.sym_head.clone(),
+            self.git.clone(),
+        )
     }
-    pub fn move_to(mut self, path: &NormalizedPath) -> Option<NodePath<AnyNode>> {
+    pub fn move_to<To: SymbolicNodeType>(
+        mut self,
+        path: &NormalizedPath,
+    ) -> Result<NodePath<To>, NodePathError> {
         let without_version = path.strip_version();
         for p in without_version.iter_segments() {
-            let node = self.get_node().borrow().get_child(p)?.clone();
+            let node = if let Some(node) = self.get_node().borrow().get_child(p) {
+                node
+            } else {
+                return Err(PathNotFoundError::new(path.clone()).into());
+            };
             self.path.push(node);
         }
         let head = match path.get_version_appendix() {
             Some(version) => {
                 if self.has_tag(version.clone()) {
-                    PointsTo::Tag(version)
+                    SymHead::Tag(version)
                 } else {
-                    PointsTo::Commit(CommitHash::new(version))
+                    SymHead::Commit(CommitHash::new(version))
                 }
             }
-            None => PointsTo::Head,
+            None => SymHead::Head,
         };
-        Some(NodePath::<AnyNode>::new(self.path, self.unknown_mode, head))
+        Ok(NodePath::<To>::new(self.path, head, self.git)?)
     }
-    pub fn move_to_index(self, index: usize) -> NodePath<AnyNode> {
+    pub fn move_to_index<To: SymbolicNodeType>(self, index: usize) -> Result<NodePath<To>, WrongNodeTypeError> {
         let path = self.path[0..index + 1].to_vec();
-        NodePath::<AnyNode>::new(path, self.unknown_mode, PointsTo::Head)
+        NodePath::<To>::new(path, SymHead::Head, self.git)
     }
     pub fn has_children(&self) -> bool {
         self.get_node().borrow().has_children()
     }
-    pub fn iter_children(&self) -> impl Iterator<Item = NodePath<AnyNode>> {
+    pub fn iter_children_by_type<I: SymbolicNodeType>(&self) -> impl Iterator<Item = NodePath<I>> {
         self.get_node()
             .borrow()
             .get_children()
             .into_iter()
-            .map(|node| {
-                self.clone()
-                    .move_to(&node.borrow().get_name().to_normalized_path())
-                    .unwrap()
+            .filter_map(|node| {
+                match self
+                    .clone()
+                    .move_to::<I>(&node.borrow().get_name().to_normalized_path()) {
+                    Ok(path) => Some(path),
+                    Err(_) => None,
+                }
             })
             .sorted()
     }
-    pub fn iter_children_req(&self) -> impl Iterator<Item = NodePath<AnyNode>> {
-        self.iter_children().flat_map(|path| {
+    pub fn iter_children_by_type_req<I: SymbolicNodeType>(&self) -> impl Iterator<Item = NodePath<I>> {
+        self.iter_children_by_type::<I>().flat_map(|path| {
             let mut to_iter = Vec::new();
             to_iter.push(path.clone());
-            to_iter.extend(path.iter_children_req());
+            to_iter.extend(path.iter_children_by_type_req());
             to_iter
         })
     }
@@ -291,14 +300,11 @@ impl<T: SymbolicNodeType> NodePath<T> {
         }
         has_tag
     }
-    pub fn get_metadata(&self) -> BranchData {
-        self.get_node().borrow().get_branch_data().clone()
-    }
-    pub fn get_actual_type(&self) -> NodeType {
+    pub fn get_real_type(&self) -> NodeType {
         self.get_node().borrow().get_type().clone()
     }
     pub fn as_any_type(&self) -> NodePath<AnyNode> {
-        NodePath::<AnyNode>::from_concrete(self)
+        NodePath::new(self.path.clone(), self.sym_head.clone(), self.git.clone()).unwrap()
     }
     pub fn display_tree(&self, show_tags: bool) -> String {
         self.get_node().borrow().display_tree(show_tags)

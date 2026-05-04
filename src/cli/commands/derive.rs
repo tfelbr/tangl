@@ -1,10 +1,10 @@
 use crate::cli::completion::*;
 use crate::cli::*;
-use crate::git::conflict::{MergeChainStatistic, NormalizedMergeStatistic};
-use crate::git::interface::GitInterface;
+use crate::core::conflict::{MergeChainStatistic, NormalizedMergeStatistic};
+use crate::core::model::git::GitInterface;
+use crate::core::model::*;
+use crate::core::*;
 use crate::logging::TanglLogger;
-use crate::model::*;
-use crate::spl::*;
 use clap::{Arg, ArgAction, Command};
 use colored::Colorize;
 use std::error::Error;
@@ -106,7 +106,7 @@ fn initialize_error_hint() -> Box<dyn Error> {
 }
 
 fn handle_initialize(
-    features: Vec<NodePath<ConcreteFeature>>,
+    features: Vec<NodePath<Feature>>,
     optimize: bool,
     derivation_manager: &mut DerivationManager,
     logger: &TanglLogger,
@@ -152,7 +152,7 @@ fn handle_continue(
         })
         .collect();
     let mut completed_chain =
-        MergeChainStatistic::<_, ConcreteFeature>::new(derivation_manager.get_product().clone());
+        MergeChainStatistic::<_, Feature>::new(derivation_manager.get_product().clone());
     completed_chain.fill_from_normalized(completed, git)?;
     let still_missing = derivation_manager.get_pending_chain()?;
     logger.info(format!("Merged {} feature(s)", completed_chain.len()));
@@ -240,7 +240,7 @@ impl CommandDefinition for DeriveCommand {
 impl CommandInterface for DeriveCommand {
     fn run_command(&self, context: &mut CommandContext) -> Result<(), Box<dyn Error>> {
         let current_area = context.git.get_current_area()?;
-        let product_path = context.git.assert_current_node_path::<ConcreteProduct>()?;
+        let product_path = context.git.assert_current_node_path::<Product>()?;
         let all_feature_paths = context
             .arg_helper
             .get_argument_values::<String>(FEATURES)
@@ -318,7 +318,7 @@ impl CommandInterface for DeriveCommand {
                 .map(|p| feature_root.clone() + p)
                 .collect();
             let features = context.git.assert_paths::<Feature>(&paths)?;
-            let transformer = ByTypeFilteringNodePathTransformer::<_, ConcreteFeature>::new();
+            let transformer = ByTypeFilteringNodePathTransformer::<_, Feature>::new();
             let node_paths = transformer.transform(features.into_iter()).collect();
             handle_initialize(
                 node_paths,
@@ -359,7 +359,7 @@ impl CommandInterface for DeriveCommand {
                     completion_helper.complete_normalized_paths(
                         feature_root.to_normalized_path(),
                         transformer
-                            .transform(feature_root.iter_children_req())
+                            .transform(feature_root.iter_children_by_type_req())
                             .map(|path| path.to_normalized_path()),
                     )
                 }

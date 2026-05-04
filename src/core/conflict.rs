@@ -1,10 +1,10 @@
-use crate::git::error::PathAssertionError;
-use crate::git::interface::GitInterface;
-use crate::logging::TanglLogger;
-use crate::model::{
+use crate::core::git::error::PathAssertionError;
+use crate::core::model::git::GitInterface;
+use crate::core::model::{
     AnyGitObject, IsGitObject, NodePath, NormalizedPath, Temporary, ToNormalizedPath,
     ToNormalizedPaths,
 };
+use crate::logging::TanglLogger;
 use colored::Colorize;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -487,7 +487,8 @@ impl<'a> ConflictChecker<'a> {
                         statistic
                     }
                     CheckMode::CherryPick => {
-                        let (statistic, _) = self.git.cherry_pick::<Temporary, C>(path.clone(), false)?;
+                        let (statistic, _) =
+                            self.git.cherry_pick::<Temporary, C>(path.clone(), false)?;
                         if statistic.contains_conflicts() || statistic.contains_up_to_date() {
                             self.git.abort_cherry_pick()?;
                             skip = true;

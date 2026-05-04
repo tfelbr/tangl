@@ -1,6 +1,6 @@
 use crate::cli::completion::CompletionHelper;
 use crate::cli::*;
-use crate::model::{AnyNode, ToNormalizedPath};
+use crate::core::model::{AnyNode, ToNormalizedPath};
 use clap::{Arg, ArgAction, Command};
 use colored::Colorize;
 use itertools::Itertools;
@@ -53,12 +53,12 @@ impl CommandInterface for LSCommand {
                 context.logger.info(tree.trim());
             }
             false => {
-                for child in node_path.iter_children().sorted() {
+                for child in node_path.iter_children_by_type().sorted() {
                     let mut name = child.to_normalized_path().last().unwrap().clone();
                     if child.get_metadata().has_branch() {
                         name = name.blue().to_string()
                     }
-                    let node_type = child.get_actual_type().get_formatted_name();
+                    let node_type = child.get_real_type().get_formatted_name();
                     if child.has_children() {
                         name += "/...".blue().to_string().as_str();
                     }
@@ -81,7 +81,7 @@ impl CommandInterface for LSCommand {
                     let root = context.git.get_virtual_root();
                     completion_helper.complete_normalized_paths(
                         current,
-                        root.iter_children_req().map(|p| p.to_normalized_path()),
+                        root.iter_children_by_type_req().map(|p| p.to_normalized_path()),
                     )
                 }
                 _ => vec![],

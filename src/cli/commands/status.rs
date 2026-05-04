@@ -1,6 +1,6 @@
 use crate::cli::*;
-use crate::model::{AnyGitObject, ConcreteProduct};
-use crate::spl::{DerivationManager, DerivationState, InspectionManager};
+use crate::core::model::{AnyGitObject, Product};
+use crate::core::{DerivationManager, DerivationState, InspectionManager};
 use clap::Command;
 use colored::Colorize;
 use std::error::Error;
@@ -29,12 +29,12 @@ impl CommandInterface for StatusCommand {
         let current_path = context.git.assert_current_node_path::<AnyGitObject>()?;
         let first_line = format!(
             "On {} branch {}",
-            current_path.get_actual_type().get_formatted_name(),
+            current_path.get_real_type().get_formatted_name(),
             current_path.to_string().blue()
         );
         context.logger.info(first_line);
         let mut maybe_new_line = "";
-        if let Some(product) = current_path.try_convert_to::<ConcreteProduct>() {
+        if let Some(product) = current_path.try_convert_to::<Product>() {
             let inspector = InspectionManager::new(&context.git);
             let state = inspector.get_last_derivation_state(&product)?;
             match state.get_state() {

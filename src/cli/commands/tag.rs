@@ -1,5 +1,5 @@
 use crate::cli::*;
-use crate::model::{AnyGitObject, NormalizedPath};
+use crate::core::model::{AnyGitObject, NormalizedPath};
 use clap::{Arg, Command};
 use std::error::Error;
 

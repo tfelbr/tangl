@@ -1,8 +1,8 @@
 use crate::cli::completion::CompletionHelper;
 use crate::cli::*;
-use crate::git::conflict::{CheckMode, ConflictChecker, MergeChainStatistics};
-use crate::model::*;
-use crate::spl::InspectionManager;
+use crate::core::InspectionManager;
+use crate::core::conflict::{CheckMode, ConflictChecker, MergeChainStatistics};
+use crate::core::model::*;
 use clap::{Arg, ArgAction, Command};
 use colored::Colorize;
 use std::error::Error;
@@ -137,7 +137,7 @@ impl CommandInterface for CheckCommand {
             && !one_to_n
         {
             let current_path = context.git.assert_current_node_path()?;
-            if current_path.try_convert_to::<ConcreteFeature>().is_some() {
+            if current_path.try_convert_to::<Feature>().is_some() {
                 let feature_root = context
                     .git
                     .get_current_area()?
@@ -152,7 +152,7 @@ impl CommandInterface for CheckCommand {
                     }
                 }));
                 run_checks(&paths, None, None, false, true, &checker)?
-            } else if let Some(product) = current_path.try_convert_to::<ConcreteProduct>() {
+            } else if let Some(product) = current_path.try_convert_to::<Product>() {
                 let inspector = InspectionManager::new(&context.git);
                 let state = inspector.get_last_derivation_state(&product)?;
                 if state.get_total().len() == 0 {
@@ -182,7 +182,7 @@ impl CommandInterface for CheckCommand {
                 let s = path.to_string();
                 if s.contains("*") || s.contains("[") || s.contains("]") {
                     let root = context.git.get_virtual_root();
-                    let iterator = root.iter_children_req();
+                    let iterator = root.iter_children_by_type_req();
                     let found: Vec<NodePath<AnyGitObject>> = finder.transform(iterator).collect();
                     final_paths.extend(found);
                 } else {
@@ -222,7 +222,7 @@ impl CommandInterface for CheckCommand {
         let completion: Vec<String> = if currently_editing.is_some() {
             let root = context.git.get_virtual_root();
             let transformer = HasBranchFilteringNodePathTransformer::new(true);
-            let relevant_paths = transformer.transform(root.iter_children_req());
+            let relevant_paths = transformer.transform(root.iter_children_by_type_req());
             match currently_editing.unwrap().get_id().as_str() {
                 PATHS => {
                     let current_path = context.git.get_current_normalized_path()?;
